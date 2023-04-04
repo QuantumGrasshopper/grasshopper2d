@@ -27,6 +27,8 @@ int main(int inputN,char *inputV[]) {
 	gridSize=get_option(inputN,inputV,"gridsize");
 	long unsigned int seed=get_option(inputN,inputV,"randomseed");
 	string initconf=get_string_option(inputN,inputV,"initconf");
+    
+    double NNint = get_option(inputN,inputV,"NNint");
 	
 	maxtime=60*60*maxtime*1000;
 	if(totalNumSpins<100) totalNumSpins=5000;
@@ -54,6 +56,7 @@ int main(int inputN,char *inputV[]) {
 	result << endl;
 	result << "Total number of spins: " << totalNumSpins << endl;
 	result << "Hopping distance: " << d << endl;
+    result << "Nearest Neighbor interaction coefficient: " << NNint << endl;
 	result << "Size of grid: " << gridSize << endl;
 	result << "Size of cell: " << cellSize << endl;
 	result << endl;
@@ -115,9 +118,23 @@ int main(int inputN,char *inputV[]) {
     
     unsigned int noSpinCounter=0;
     double energy = 0;
+    double NNenergy = 0;
 	for(unsigned int i=0;i<gridArea;i++)
 		{
 		if(grid[i]==false) {noSpinArray[noSpinCounter]=i; noSpinCounter++;}
+		// NN contributions
+		else {
+            //down
+            if(i>=gridSize) NNenergy += grid[i-gridSize];
+            //up
+            if(i<gridSize*(gridSize-1)) NNenergy += grid[i+gridSize];
+            
+            int gridLocationx = xcoord(i);
+            //left
+            if(gridLocationx != 0) NNenergy += grid[i-1];
+            //right
+            if(gridLocationx != gridSize-1) NNenergy += grid[i+1];
+            }
         // Fill the energy grid
         energyGrid[i]=0;
         for(unsigned int j=0;j<dNeighbourTable[i].size();j++)
@@ -128,6 +145,8 @@ int main(int inputN,char *inputV[]) {
         if(grid[i]==true) energy += energyGrid[i];
 		}
     energy = energy/2.;
+    NNenergy = NNenergy*NNint/2.;
+    energy += NNenergy;
 		
     ofstream energies("energies.dat");
 	ofstream temperatures("temperatures.dat");
@@ -157,6 +176,24 @@ int main(int inputN,char *inputV[]) {
             {
             energyDifference -= contributionEnergy(d,euclideanDistance( findPosition(newSpinCoord),findPosition(oldSpinCoord) ));
             }
+        // Nearest neighbor contributions
+        //down
+        if(newSpinCoord>=gridSize && newSpinCoord-gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-gridSize];
+        if(oldSpinCoord>=gridSize && oldSpinCoord-gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-gridSize];
+        //up
+        if(newSpinCoord<gridSize*(gridSize-1) && newSpinCoord+gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+gridSize];
+        if(oldSpinCoord<gridSize*(gridSize-1) && oldSpinCoord+gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+gridSize];
+            
+        int gridLocationx = xcoord(newSpinCoord);
+        //left
+        if(gridLocationx != 0 && newSpinCoord-1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-1];
+        //right
+        if(gridLocationx != gridSize-1 && newSpinCoord+1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+1];
+        gridLocationx = xcoord(oldSpinCoord);
+        //left
+        if(gridLocationx != 0 && oldSpinCoord-1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-1];
+        //right
+        if(gridLocationx != gridSize-1 && oldSpinCoord+1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+1];
 
 		bool accept;
 		if(energyDifference>=0) accept=true;
