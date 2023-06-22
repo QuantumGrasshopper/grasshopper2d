@@ -7,6 +7,7 @@ double cellSize;
 unsigned int gridSize;
 unsigned int gridArea;
 double tempScaling;
+int deltaOption;
 
 using namespace std; 
 
@@ -27,6 +28,7 @@ int main(int inputN,char *inputV[]) {
 	gridSize=get_option(inputN,inputV,"gridsize");
 	long unsigned int seed=get_option(inputN,inputV,"randomseed");
 	string initconf=get_string_option(inputN,inputV,"initconf");
+    deltaOption=get_option(inputN,inputV,"delta");
     
     double NNint = get_option(inputN,inputV,"NNint");
 	
@@ -44,8 +46,11 @@ int main(int inputN,char *inputV[]) {
 	cellSize=1./sqrt(double(totalNumSpins));
 	if(gridSize<10) gridSize=2*int(sqrt(double(totalNumSpins))+EPS)+2*int(3*d/cellSize+EPS);
 	gridArea = gridSize*gridSize;
+    // one factor of 1/2 is already taken care of by avoiding double counting
+    double probabilityNormFactor = 1/PI/d/pow(double(totalNumSpins),3./2.);
     
 	gsl_rng * RNG = gsl_rng_alloc (gsl_rng_mt19937);
+    if(seed==0) seed=std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 	gsl_rng_set (RNG, seed);
 	
 	unsigned int temproundcounter=0;
@@ -61,6 +66,7 @@ int main(int inputN,char *inputV[]) {
 	result << "Size of cell: " << cellSize << endl;
 	result << endl;
 	result << "Random seed: " << seed << endl;
+    result << "Option for delta-function discretization: " << deltaOption << endl;
 	result << "Initial temperature: " << temperature << endl;
 	result << "Final temperature: " << finaltemperature << endl;
 	result << "Temperature scaling factor: " << tempScaling << endl;
@@ -262,6 +268,8 @@ int main(int inputN,char *inputV[]) {
 	result << endl;
 	result << "final energy: " << energy << endl;
 	result << "best energy: " << bestenergy << endl;
+    result << "final probability: " << energy*probabilityNormFactor << endl;
+    result << "best probability: " << bestenergy*probabilityNormFactor << endl;
 	result << endl;
     
     ofstream finconf("finconf.dat");

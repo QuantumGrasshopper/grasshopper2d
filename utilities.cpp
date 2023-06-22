@@ -37,7 +37,19 @@ bool isAround(double have, double comparewith)
 double contributionEnergy(double have, double comparewith)
 	{
 	double contribution=0;
-	if(isAround(have,comparewith)) contribution=(1. + cos(PI*(have-comparewith)/cellSize/2.))/4.;
+    
+    if(isAround(have,comparewith)) 
+        {
+        if(deltaOption==0) contribution=(1. + cos(PI*(have-comparewith)/cellSize/2.))/4.;
+        else if(deltaOption==1)
+            {
+        	double absdist=abs(have-comparewith)/cellSize;
+            if(absdist<1) contribution=17./48.+sqrt(3.)*PI/108.+absdist/4.-absdist*absdist/4.+(1-2*absdist)*sqrt(1.+12*absdist*(1-absdist))/16.-sqrt(3.)*asin(sqrt(3.)*(2*absdist-1)/2.)/12.;
+            else if( (absdist>=1)&&(absdist<2) ) contribution=55./48.-sqrt(3.)*PI/108.-13.*absdist/12.+absdist*absdist/4.+(2*absdist-3)*sqrt(36*absdist-23.-12*absdist*absdist)/48.+sqrt(3.)*asin(sqrt(3.)*(2*absdist-3)/2.)/36.;
+            }
+        else throw logic_error("Invalid delta function discretization option");
+        }
+    
 	return contribution;
 	} 
 	
