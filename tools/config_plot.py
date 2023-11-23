@@ -2,7 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 inputfile = input("Name of file containing spin configuration: ")
-gridsize = int(input("Grid size: "))
+
+with open("result.dat") as f:
+    lines = f.readlines()
+    gridsize = int(lines[5].strip().split(" ")[-1])
 
 data = np.genfromtxt(inputfile, dtype = int)
 numberspins = len(data)

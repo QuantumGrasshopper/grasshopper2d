@@ -2,8 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt 
 
 data = np.genfromtxt("config.dat", dtype = int)
-gridsize = int(input("Grid size: "))
 
+with open("result.dat") as f:
+    lines = f.readlines()
+    gridsize = int(lines[5].strip().split(" ")[-1])
+    
 print("Entering -1 will end the loop")
 
 while(True):
