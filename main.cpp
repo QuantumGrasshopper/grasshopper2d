@@ -156,10 +156,10 @@ int main(int inputN,char *inputV[]) {
 		
     ofstream energies("energies.dat");
 	ofstream temperatures("temperatures.dat");
-	energies << energy << endl;
+	energies << energy*probabilityNormFactor << endl;
 	ofstream configuration("config.dat");
 	for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " ";
-	configuration << energy << endl;
+	configuration << energy*probabilityNormFactor << endl;
 	
 	int bestSpinArray[totalNumSpins];	//the overall best spin array during the whole run
 	for(unsigned int i=0;i<totalNumSpins;i++) bestSpinArray[i]=spinArray[i];
@@ -236,7 +236,7 @@ int main(int inputN,char *inputV[]) {
 				if(annealingcounter%outputconfigbeforetherm==0) 
 					{
                     for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " "; 
-                    configuration << energy << endl;
+                    configuration << energy*probabilityNormFactor << endl;
                     }
 				annealingcounter++;
 				}
@@ -244,11 +244,11 @@ int main(int inputN,char *inputV[]) {
 				{
 				annealingcounter++; 
                 for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " "; 
-                configuration << energy << endl;
+                configuration << energy*probabilityNormFactor << endl;
 				}
 			accratio=accepted_current/double(temproundcounter);
 			temperatures << counter << '\t' << temperature << '\t' << accratio << endl;
-			energies << energy << endl;
+			energies << energy*probabilityNormFactor << endl;
 			accepted+=accepted_current; accepted_current=0;
 			temproundcounter=0;
 			temproundsteps=stepIncrease(temproundsteps);
