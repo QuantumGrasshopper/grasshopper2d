@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt 
 
-data = np.genfromtxt("config.dat", dtype = int)
+data = np.loadtxt("config.dat", dtype = float)
 
 with open("result.dat") as f:
     lines = f.readlines()
@@ -20,8 +20,8 @@ while(True):
     row = data[rownum]
     zvals = np.zeros((gridsize,gridsize))
     for j in row[:-1]:    # last element is energy
-        y = j//gridsize
-        x = j - y*gridsize
+        y = int(j)//gridsize
+        x = int(j) - y*gridsize
         zvals[x,y] = 1
     
     plt.imshow(zvals, interpolation='None', cmap='Greens')

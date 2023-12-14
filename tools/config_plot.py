@@ -7,7 +7,7 @@ with open("result.dat") as f:
     lines = f.readlines()
     gridsize = int(lines[5].strip().split(" ")[-1])
 
-data = np.genfromtxt(inputfile, dtype = int)
+data = np.loadtxt(inputfile, dtype = int)
 numberspins = len(data)
 
 zvals = np.zeros((gridsize,gridsize))
