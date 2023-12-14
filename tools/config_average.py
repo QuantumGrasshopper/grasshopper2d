@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 # this script creates an average representative configuration
 # for code that was run at fixed temperature
 
-data = np.genfromtxt("config.dat", dtype = float)
+data = np.loadtxt("config.dat", dtype = float)
 
 filesize = len(data)
 
