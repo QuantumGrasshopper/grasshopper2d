@@ -29,6 +29,7 @@ int main(int inputN,char *inputV[]) {
 	long unsigned int seed=get_option(inputN,inputV,"randomseed");
 	string initconf=get_string_option(inputN,inputV,"initconf");
     deltaOption=get_option(inputN,inputV,"delta");
+    bool configOutputs = get_option(inputN,inputV,"configoutput");
     
     double NNint = get_option(inputN,inputV,"NNint");
 	
@@ -159,9 +160,12 @@ int main(int inputN,char *inputV[]) {
 	ofstream temperatures("temperatures.dat");
 	energies << energy*probabilityNormFactor << endl;
 	ofstream configuration("config.dat");
-	for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " ";
-	configuration << energy*probabilityNormFactor << endl;
-	
+	if(configOutputs)
+        {
+        for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " ";
+        configuration << energy*probabilityNormFactor << endl;
+        }
+    
 	int bestSpinArray[totalNumSpins];	//the overall best spin array during the whole run
 	for(unsigned int i=0;i<totalNumSpins;i++) bestSpinArray[i]=spinArray[i];
 	double bestenergy=energy;
@@ -234,7 +238,7 @@ int main(int inputN,char *inputV[]) {
 			if(temperature>finaltemperature) 
 				{
 				temperature=temperatureDecrease(temperature);
-				if(annealingcounter%outputconfigbeforetherm==0) 
+				if(annealingcounter%outputconfigbeforetherm==0 && configOutputs) 
 					{
                     for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " "; 
                     configuration << energy*probabilityNormFactor << endl;
@@ -244,8 +248,11 @@ int main(int inputN,char *inputV[]) {
 			else if(annealingcounter<maxoutputconfigs)
 				{
 				annealingcounter++; 
-                for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " "; 
-                configuration << energy*probabilityNormFactor << endl;
+                if(configOutputs)
+                    {
+                    for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " "; 
+                    configuration << energy*probabilityNormFactor << endl;
+                    }
 				}
 			accratio=accepted_current/double(temproundcounter);
 			temperatures << counter << '\t' << temperature << '\t' << accratio << endl;
@@ -273,6 +280,7 @@ int main(int inputN,char *inputV[]) {
     result << "best probability: " << bestenergy*probabilityNormFactor << endl;
 	result << endl;
     
+    if(!configOutputs) {remove("config.dat");}
     ofstream finconf("finconf.dat");
     saveConfig(spinArray, finconf);
 	ofstream bestconf("bestconf.dat");
