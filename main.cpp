@@ -44,8 +44,9 @@ int main(int inputN,char *inputV[]) {
 	int outputconfigbeforetherm=numberannealingsteps/100; int annealingcounter=0; int maxoutputconfigs=200;	//for output config dat
 	
 	cellSize=1./sqrt(double(totalNumSpins));
-	if(gridSize<10) gridSize=2*int(sqrt(double(totalNumSpins))+EPS)+2*int(3*d/cellSize+EPS);
+	if( (gridSize<10) || (totalNumSpins > gridSize*gridSize) ) gridSize=2*int(sqrt(double(totalNumSpins))+EPS)+2*int(3*d/cellSize+EPS);
 	gridArea = gridSize*gridSize;
+    
     // one factor of 1/2 is already taken care of by avoiding double counting
     double probabilityNormFactor = 1/PI/d/pow(double(totalNumSpins),3./2.);
     
