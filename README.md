@@ -2,7 +2,7 @@
 
 Currently implemented for a square grid and with simulated annealing
 
-1. Prerequisites and compilation
+## 1. Prerequisites and compilation
 
 - make
 - GSL library
@@ -10,13 +10,13 @@ Currently implemented for a square grid and with simulated annealing
 
 To compile the code, type `make` in the shell while in the folder containing the code.
 
-2. Code options (the order doesn't matter)
+## 2. Code options (the order doesn't matter)
 
 | option          | comment |
 | --------------- | ------------------ |
 | `-d`           | hopping distance of the grasshopper in regular length units (the length unit in which the volume is 1), e.g. 0.1 or 0.5 or 2 or 10 |
 | `-hours`       | how many hours the code should run (can be less than 1 hour), e.g. 0.1, 0.5, 2, 48, can also be 0 (default value) if you only want to look at the initial configuration |
-| `-steps`       |    how many steps the code should maximally run (`1e12` by default), but code will terminate earlier if maximal time is reached |
+| `-steps`       | how many steps the code should maximally run (`1e12` by default), but code will terminate earlier if maximal time is reached |
 | `-N`           | total number of grid points with spin 1 (10000 is default) |
 | `-initconf`    | how to initialise the system, must be specified. Currently implemented: `random` or `load` (load configuration from file called `initconf.dat`) |
 | `-tempsteps`   | initial number of steps before first temperature decrease (the number of steps between decreases goes up with each round) |
@@ -24,7 +24,9 @@ To compile the code, type `make` in the shell while in the folder containing the
 | `-fintemp`     | final temperature (need to run long enough to reach it) |
 | `-annealsteps` | number of simulated annealing steps between initial and final temperature |
 | `-gridsize`    | for square grid length of square edge (number of cells) |
-| `-randomseed`  | initial value for the random number generator |
+| `-randomseed`  | initial value for the random number generator (if none specified will generate a random seed based on the system clock) |
+| `-configoutput`| whether to output `config.dat`, see below; takes values `0` or `1` with default of `0` (no output) |
+| `-NNint`       | nearest neighbor interaction coefficient (0 by default) |
 
 You can also look into the source code to remind yourself of what the options do.
 
@@ -35,20 +37,24 @@ file name | comment
 `result.dat` | general info about the simulation and parameters
 `initconf.dat` | initial spin configuration
 `finconf.dat` | final spin configuration
-`energies.dat` | every time the energy changes the energy value is written to this file
-`config.dat` | stores the spin configuration and energy every certain number of steps, can be used to generate animations of the system evolution
+`bestconf.dat` | best spin configuration over the whole run
+`energies.dat` | every annealing round the energy (grasshopper probability) value is written to this file
 `temperatures.dat` | every annealing round prints the counter, the current temperature, and the current acceptance ratio
-`bestconf.dat` | best configuration over the whole run
+`config.dat` | stores the spin configuration and energy every certain number of steps, can be used to generate animations of the system evolution (no longer output by default)
+
 
 Example of command to run the code:
 
-> `./grasshopper -N 10000 -initconf random -gridsize 200 -d 0.3 -randomseed 123 -hours 0.2 -inittemp 20.0 -fintemp 0.05 `
+> `./grasshopper -N 10000 -initconf random -gridsize 200 -d 0.3 -hours 0.2 -inittemp 20.0 -fintemp 0.05 `
 
-Not all options need to be always specified, but specifying `N`, `d`, `randomseed`, and `hours` is a good idea. Also `initconf` needs to be specified.
+Not all options need to be always specified, but specifying `N`, `d`, and `hours` is a good idea. Also `initconf` needs to be specified.
 
-3. Plotting spin configurations
+## 3. Plotting spin configurations
 
 Python scripts for plotting spin configurations and other tools can be found in the subfolder `tools`.
 
-- `config_plot.py` plots a grasshopper spin configuration in 2d, such as `initconf.dat` or `bestconf.dat` etc. Inputs are the name of the configuration file and the size of the grid.
-- `anneal_animation.py` generates an animation of the simulated annealing process from the file `config.dat`, which is output by the main code. The size of the grid must be manually entered.
+- `config_plot.py` plots a grasshopper spin configuration in 2d, such as `initconf.dat` or `bestconf.dat` etc. Input is the name of the configuration file; everthing else is read automatically from `result.dat`, which must be present.
+- `anneal_animation.py` generates an animation of the simulated annealing process from the file `config.dat`, which is output by the main code. The size of the grid is read automatically from `result.dat`, which must be present.
+- `anneal_frame.py` plots individual frames from `config.dat` rather than creating the full animation.
+- `extract_boundary.py` extracts the boundary of a cogwheel shape (read from `finconf.dat`) and returns it in the polar coordinate representation (rho vs. phi). The files `finconf.dat` and `result.dat` must be present.
+- `finite_temp_analysis.py` contains several routines for analyzing output from simulations that ran at constant temperature. It automatically generates several figures. The root directory must be manually adjusted.
