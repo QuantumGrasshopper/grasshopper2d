@@ -58,23 +58,20 @@ int main(int inputN,char *inputV[]) {
 	unsigned int temproundcounter=0;
 	double accratio;
     long unsigned int counter=0; long accepted=0; long accepted_current=0;
-
-    result << "2D Grasshopper with Simulated Annealing, Euclidean metric" << endl;
-	result << endl;
-	result << "Total number of spins: " << totalNumSpins << endl;
-	result << "Hopping distance: " << d << endl;
-    result << "Nearest Neighbor interaction coefficient: " << NNint << endl;
-	result << "Size of grid: " << gridSize << endl;
-	result << "Size of cell: " << cellSize << endl;
-	result << endl;
-	result << "Random seed: " << seed << endl;
-    result << "Option for delta-function discretization: " << deltaOption << endl;
-	result << "Initial temperature: " << temperature << endl;
-	result << "Final temperature: " << finaltemperature << endl;
-	result << "Temperature scaling factor: " << tempScaling << endl;
-	result << "Number of annealing steps: " << numberannealingsteps << endl;
-	result << "Initial number of steps before temperature scaling: " << temproundsteps << endl;
-	result << endl;
+    
+    result << "2D Grasshopper with Simulated Annealing, Euclidean metric\n\n"
+           << "Total number of spins: " << totalNumSpins << '\n'
+           << "Hopping distance: " << d << '\n'
+           << "Nearest Neighbor interaction coefficient: " << NNint << '\n'
+           << "Size of grid: " << gridSize << '\n'
+           << "Size of cell: " << cellSize << "\n\n"
+	       << "Random seed: " << seed << '\n'
+           << "Option for delta-function discretization: " << deltaOption << '\n'
+	       << "Initial temperature: " << temperature << '\n'
+	       << "Final temperature: " << finaltemperature << '\n'
+	       << "Temperature scaling factor: " << tempScaling << '\n'
+	       << "Number of annealing steps: " << numberannealingsteps << '\n'
+	       << "Initial number of steps before temperature scaling: " << temproundsteps << "\n\n";
 
     auto begin = chrono::high_resolution_clock::now();
     
@@ -156,14 +153,18 @@ int main(int inputN,char *inputV[]) {
     NNenergy = NNenergy*NNint/2.;
     energy += NNenergy;
 		
-    ofstream energies("energies.dat");
-	ofstream temperatures("temperatures.dat");
-	energies << energy*probabilityNormFactor << endl;
+    int bufferLimit = 10000;
+    int flushInterval = 60*1000;
+    BufferedFileWriter energies("energies.dat", bufferLimit, chrono::milliseconds(flushInterval));
+	energies.write(to_string(energy*probabilityNormFactor));
+    BufferedFileWriter temperatures("temperatures.dat", bufferLimit, chrono::milliseconds(flushInterval));
 	ofstream configuration("config.dat");
 	if(configOutputs)
         {
-        for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " ";
-        configuration << energy*probabilityNormFactor << endl;
+        ostringstream buffer;
+        for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
+        buffer << energy*probabilityNormFactor << endl;
+        configuration << buffer.str();
         }
     
 	int bestSpinArray[totalNumSpins];	//the overall best spin array during the whole run
@@ -240,8 +241,10 @@ int main(int inputN,char *inputV[]) {
 				temperature=temperatureDecrease(temperature);
 				if(annealingcounter%outputconfigbeforetherm==0 && configOutputs) 
 					{
-                    for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " "; 
-                    configuration << energy*probabilityNormFactor << endl;
+                    ostringstream buffer;
+                    for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
+                    buffer << energy*probabilityNormFactor << endl;
+                    configuration << buffer.str();
                     }
 				annealingcounter++;
 				}
@@ -249,14 +252,16 @@ int main(int inputN,char *inputV[]) {
 				{
 				annealingcounter++; 
                 if(configOutputs)
-                    {
-                    for(unsigned int i=0;i<totalNumSpins;i++) configuration << spinArray[i] << " "; 
-                    configuration << energy*probabilityNormFactor << endl;
+					{
+                    ostringstream buffer;
+                    for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
+                    buffer << energy*probabilityNormFactor << endl;
+                    configuration << buffer.str();
                     }
 				}
 			accratio=accepted_current/double(temproundcounter);
-			temperatures << counter << '\t' << temperature << '\t' << accratio << endl;
-			energies << energy*probabilityNormFactor << endl;
+            temperatures.write(to_string(counter) + '\t' + to_string(temperature) + '\t' + to_string(accratio));
+			energies.write(to_string(energy*probabilityNormFactor));
 			accepted+=accepted_current; accepted_current=0;
 			temproundcounter=0;
 			temproundsteps=stepIncrease(temproundsteps);
@@ -268,17 +273,17 @@ int main(int inputN,char *inputV[]) {
 		
     // WRAP UP --------------------------------------------------------------------------------------------
     
-    result << endl;
-	result << "Simulation took " << timeDiff/60./1000 << " minutes" << endl;
-	result << "Finished after " << counter << " steps" << endl;
-	result << "Final temperature: " << temperature << endl;
-	result << "Average acceptance ratio: " << accepted/double(counter) << endl;
-	result << endl;
-	result << "final energy: " << energy << endl;
-	result << "best energy: " << bestenergy << endl;
-    result << "final probability: " << energy*probabilityNormFactor << endl;
-    result << "best probability: " << bestenergy*probabilityNormFactor << endl;
-	result << endl;
+    temperatures.flush();
+    energies.flush();
+    
+	result << "\n Simulation took " << timeDiff/60./1000 << " minutes" << '\n'
+	       << "Finished after " << counter << " steps" << '\n'
+	       << "Final temperature: " << temperature << '\n'
+	       << "Average acceptance ratio: " << accepted/double(counter) << "\n\n"
+	       << "final energy: " << energy << '\n'
+	       << "best energy: " << bestenergy << '\n'
+           << "final probability: " << energy*probabilityNormFactor << '\n'
+           << "best probability: " << bestenergy*probabilityNormFactor << "\n\n";
     
     if(!configOutputs) {remove("config.dat");}
     ofstream finconf("finconf.dat");

@@ -38,12 +38,12 @@ void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
 			spincounter++;
 			}
 		}
-		
-		
-void saveConfig(int *spinArray, ofstream& filename)
-    {
-    for(unsigned int i=0;i<totalNumSpins;i++) filename << spinArray[i] << endl;
-    }
+
+void saveConfig(int *spinArray, ofstream& filename) {
+    ostringstream buffer;
+    for (unsigned int i = 0; i < totalNumSpins; i++) buffer << spinArray[i] << '\n';
+    filename << buffer.str();
+}
     
     
 void initialize(bool grid[], int spinArray[], gsl_rng* RNG, string initconf)
