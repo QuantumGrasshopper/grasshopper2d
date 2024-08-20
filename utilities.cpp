@@ -2,32 +2,6 @@
 
 using namespace std;
 
-double get_option(int inputN,char *inputV[], const char *was)
-	{
-	int n;
-	char option[20];
-	sprintf(option,"-%s",was);
-	for (n=1;n<(inputN-1);n++)
-		{
-		if (strcmp(inputV[n],option)==0)
-			return (double) atof(inputV[n+1]);
-		}
-	return 0;
-	}
-	
-string get_string_option(int inputN,char *inputV[], const char *was)
-	{
-	int n;
-	char option[20];
-	sprintf(option,"-%s",was);
-	for (n=1;n<(inputN-1);n++)
-		{
-		if (strcmp(inputV[n],option)==0)
-			return inputV[n+1];
-		}
-	return 0;
-	}
-
 bool isAround(double have, double comparewith)
 	{	
 	if(abs(have-comparewith)/cellSize<=2) return true;
@@ -47,7 +21,7 @@ double contributionEnergy(double have, double comparewith)
             if(absdist<1) contribution=17./48.+sqrt(3.)*PI/108.+absdist/4.-absdist*absdist/4.+(1-2*absdist)*sqrt(1.+12*absdist*(1-absdist))/16.-sqrt(3.)*asin(sqrt(3.)*(2*absdist-1)/2.)/12.;
             else if( (absdist>=1)&&(absdist<2) ) contribution=55./48.-sqrt(3.)*PI/108.-13.*absdist/12.+absdist*absdist/4.+(2*absdist-3)*sqrt(36*absdist-23.-12*absdist*absdist)/48.+sqrt(3.)*asin(sqrt(3.)*(2*absdist-3)/2.)/36.;
             }
-        else throw logic_error("Invalid delta function discretization option");
+        else throw logic_error("Error: Invalid delta function discretization option");
         }
     
 	return contribution;
@@ -86,4 +60,42 @@ double euclideanDistance(pair<int,int> point1, pair<int,int> point2)
 	double x1=point1.second-point2.second; x1=x1*x1;
 	return cellSize*sqrt(x1+x0);
 	}
+	
+// I/O routines
+	
+
+BufferedFileWriter::BufferedFileWriter(const string& filename, size_t limit, chrono::milliseconds interval)
+        : bufferLimit(limit), flushInterval(interval) {
+        file.open(filename);
+        if (!file.is_open()) {
+            throw runtime_error("Error: Cannot open " + filename + " for writing.");
+        }
+        lastFlushTime = chrono::steady_clock::now();
+    }
+
+void BufferedFileWriter::write(const string& data) {
+        buffer.push_back(data);
+
+        auto now = chrono::steady_clock::now();
+        if (buffer.size() >= bufferLimit || (now - lastFlushTime) >= flushInterval) {
+            flush();
+            lastFlushTime = now;
+        }
+    }
+
+void BufferedFileWriter::flush() {
+        for (const auto& line : buffer) {
+            file << line << '\n';
+        }
+        buffer.clear();
+        file.flush();
+    }
+
+BufferedFileWriter::~BufferedFileWriter() {
+        flush();
+        if (file.is_open()) {
+            file.close();
+        }
+    }
+
 	

@@ -14,40 +14,42 @@ To compile the code, type `make` in the shell while in the folder containing the
 
 | option          | comment |
 | --------------- | ------------------ |
-| `-d`           | hopping distance of the grasshopper in regular length units (the length unit in which the volume is 1), e.g. 0.1 or 0.5 or 2 or 10 |
-| `-hours`       | how many hours the code should run (can be less than 1 hour), e.g. 0.1, 0.5, 2, 48, can also be 0 (default value) if you only want to look at the initial configuration |
-| `-steps`       | how many steps the code should maximally run (`1e12` by default), but code will terminate earlier if maximal time is reached |
-| `-N`           | total number of grid points with spin 1 (10000 is default) |
-| `-initconf`    | how to initialise the system, must be specified. Currently implemented: `random` or `load` (load configuration from file called `initconf.dat`) |
-| `-tempsteps`   | initial number of steps before first temperature decrease (the number of steps between decreases goes up with each round) |
-| `-inittemp`    | initial temperature |
-| `-fintemp`     | final temperature (need to run long enough to reach it) |
-| `-annealsteps` | number of simulated annealing steps between initial and final temperature |
-| `-gridsize`    | for square grid length of square edge (number of cells) |
-| `-randomseed`  | initial value for the random number generator (if none specified will generate a random seed based on the system clock) |
-| `-configoutput`| whether to output `config.dat`, see below; takes values `0` or `1` with default of `0` (no output) |
-| `-NNint`       | nearest neighbor interaction coefficient (0 by default) |
+| `-d`            | grasshopper jump distance in regular length units (unit in which the lawn area is 1), e.g. 0.1 or 0.5 or 2 or 10 |
+| `-N`            | total number of grid points with spin 1 (10000 is default) |
+| `-gridsize`     | for square grid length of square edge (number of cells) |
+| `-hours`        | how many hours the code should run (can be less than 1 hour), e.g. 0.1, 0.5, 2, 48, can also be 0 (default value) if you only want to look at the initial configuration |
+| `-steps`        | how many steps the code should maximally run (`1e12` by default), but code will terminate earlier if maximal time is reached |
+| `-tempsteps`    | initial number of steps before first temperature decrease (the number of steps between decreases goes up with each round) |
+| `-inittemp`     | initial temperature |
+| `-fintemp`      | final temperature (need to run long enough to reach it) |
+| `-annealsteps`  | number of simulated annealing steps between initial and final temperature |
+| `-configoutput` | whether to output `config.dat`, see below; takes values `0` (default, no output) or `1` |
+| `-initconf`     | how to initialise the system: currently implemented: `random` (default) or `load` (load configuration from file called `initconf.dat`) |
+| `-delta`        | choice of delta-function discretization (two options implemented, see code)
+| `-NNint`        | nearest neighbor interaction coefficient (0 by default) |
+| `-randomseed`   | initial value for the random number generator (if none specified will generate a random seed based on the system clock) |
+
+
+Required options: `d`
+Recommended options: `N`, `gridsize`, `hours`
 
 You can also look into the source code to remind yourself of what the options do.
 
 The code will generate the following output files:
 
-file name | comment
----------- | ---------
-`result.dat` | general info about the simulation and parameters
-`initconf.dat` | initial spin configuration
-`finconf.dat` | final spin configuration
-`bestconf.dat` | best spin configuration over the whole run
-`energies.dat` | every annealing round the energy (grasshopper probability) value is written to this file
+file name          | comment
+---------------    | ---------------
+`result.dat`       | general info about the simulation and parameters
+`initconf.dat`     | initial spin configuration
+`finconf.dat`      | final spin configuration
+`bestconf.dat`     | best spin configuration over the whole run
+`energies.dat`     | every annealing round the energy (grasshopper probability) value is written to this file
 `temperatures.dat` | every annealing round prints the counter, the current temperature, and the current acceptance ratio
-`config.dat` | stores the spin configuration and energy every certain number of steps, can be used to generate animations of the system evolution (no longer output by default)
-
+`config.dat`       | stores the spin configuration and energy every certain number of steps, can be used to generate animations of the system evolution (no longer output by default)
 
 Example of command to run the code:
 
 > `./grasshopper -N 10000 -initconf random -gridsize 200 -d 0.3 -hours 0.2 -inittemp 20.0 -fintemp 0.05 `
-
-Not all options need to be always specified, but specifying `N`, `d`, and `hours` is a good idea. Also `initconf` needs to be specified.
 
 ## 3. Plotting spin configurations
 

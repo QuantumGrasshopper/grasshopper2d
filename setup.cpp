@@ -2,21 +2,44 @@
 
 using namespace std;
 	
-void initLoad(bool grid[], int spinArray[])
-		{
-		ifstream initconfin("initconf.dat");
-		for(unsigned int i=0;i<gridArea;i++)
-			{
-			grid[i]=false;
-			}
-		for(unsigned int i=0;i<totalNumSpins;i++) 
-			{
-			initconfin >> spinArray[i];
-			grid[spinArray[i]]=true;
-			}
-		}
+void initLoad(bool grid[], int spinArray[]) {
+    
+    // Load initial configuration file
+    ifstream initconfin("initconf.dat");
+    if (!initconfin.is_open()) {
+        throw runtime_error("Error: Cannot open initconf.dat for reading.");
+        }
+     
+    // Prep the grid
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        grid[i]=false;
+        }
+        
+    // Read in data checking that totalNumSpins and gridSize match
+    // Note that if current grid is larger than the original grid, there will be no error message as long as totalNumSpins matches
+    for (unsigned int i = 0; i < totalNumSpins; i++) {
+        
+        if (!(initconfin >> spinArray[i])) {
+            throw runtime_error("Error: Invalid or insufficient data in initconf.dat.");
+            }
+
+        if (spinArray[i] < 0 || spinArray[i] >= static_cast<int>(gridArea)) {
+            throw runtime_error("Error: spinArray[i] value is out of current grid bounds.");
+            }
+
+        grid[spinArray[i]] = true;
+    }
+
+    // Check if the configuration file has extra data
+    int extraCheck;
+    if (initconfin >> extraCheck) {
+        throw runtime_error("Error: initconf.dat contains more data than expected.");
+        }
+
+    }
 		
-		
+
 void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
 		{
 		for(unsigned int i=0;i<gridArea;i++)
@@ -38,23 +61,33 @@ void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
 			spincounter++;
 			}
 		}
-		
-		
-void saveConfig(int *spinArray, ofstream& filename)
-    {
-    for(unsigned int i=0;i<totalNumSpins;i++) filename << spinArray[i] << endl;
-    }
+
+void saveConfig(int *spinArray, const string& filename) {
+    ofstream file;
+    file.open(filename);
+    if (!file.is_open()) {
+        throw runtime_error("Error: Cannot open " + filename + " for writing.");
+        }
+    
+    ostringstream buffer;
+    for (unsigned int i = 0; i < totalNumSpins; i++) buffer << spinArray[i] << '\n';
+    file << buffer.str();
+}
     
     
-void initialize(bool grid[], int spinArray[], gsl_rng* RNG, string initconf)
-{
-	if(initconf=="random") initRandom(grid, spinArray, RNG);
-    else if(initconf=="load") initLoad(grid, spinArray);
-    else throw logic_error("Invalid initialization.");
+void initialize(bool grid[], int spinArray[], gsl_rng* RNG, string initconf) {    
+    try {
+        if (initconf == "random") initRandom(grid, spinArray, RNG);
+        else if (initconf == "load") initLoad(grid, spinArray);
+        else throw logic_error("Warning: Initialization not specified or invalid.");
+        }
+    catch (const logic_error& e) {
+        cerr << e.what() << " - Proceeding with random initialization." << endl;
+        initRandom(grid, spinArray, RNG);
+        }
         
 	if(!(initconf=="load"))
 		{
-		ofstream initconfout("initconf.dat");
-		saveConfig(spinArray, initconfout);
+		saveConfig(spinArray, "initconf.dat");
 		}
 }
