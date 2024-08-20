@@ -31,6 +31,22 @@ extern unsigned int gridArea;
 extern double tempScaling;
 extern int deltaOption;
 
+// extern std::set<std::string> validOptions = {"-d", 
+//                                              "-N", 
+//                                              "-gridsize", 
+//                                              "-hours", 
+//                                              "-steps", 
+//                                              "-tempsteps",
+//                                              "-inittemp", 
+//                                              "-fintemp",
+//                                              "-annealsteps",
+//                                              "-configoutput",
+//                                              "-initconf", 
+//                                              "-delta", 
+//                                              "-NNint",
+//                                              "-randomseed"    
+//                                              };
+
 // common functions
 
 bool isAround(double have, double comparewith);
@@ -43,8 +59,25 @@ double euclideanDistance(std::pair<int,int> point1, std::pair<int,int> point2);
 
 // I/O routines
 
-double get_option(int inputN,char *inputV[], const char *was);
-std::string get_string_option(int inputN,char *inputV[], const char *was);
+template<typename T>
+T get_option(int inputN, char *inputV[], const char *was)
+    {
+    char option[20];
+    sprintf(option, "-%s", was);
+    for (int n = 1; n < (inputN - 1); n++)
+        {
+        if (strcmp(inputV[n], option) == 0)
+            {
+            const char* value = inputV[n + 1];
+            // Use double for all numerical types (double, int, bool, etc)
+            if constexpr (std::is_same_v<T, std::string>) return std::string(value);
+            else return static_cast<T>(std::strtod(value, nullptr));  // Convert directly to double, then cast to T
+            }
+        }
+    // Default values
+    if constexpr (std::is_same_v<T, std::string>) return "";
+    else return static_cast<T>(0.0);
+}
 
 class BufferedFileWriter {
 private:

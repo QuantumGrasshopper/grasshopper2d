@@ -17,42 +17,64 @@ int main(int inputN,char *inputV[]) {
     
     ofstream result("result.dat");
 	
-	double d=get_option(inputN,inputV,"d");					//grasshopper hopping distance
-	double maxtime=get_option(inputN,inputV,"hours");
-	long unsigned int maxsteps=get_option(inputN,inputV,"steps");
-	long unsigned int temproundsteps=get_option(inputN,inputV,"tempsteps");
-	double temperature=get_option(inputN,inputV,"inittemp");
-	double finaltemperature=get_option(inputN,inputV,"fintemp");
-	int numberannealingsteps=get_option(inputN,inputV,"annealsteps");
-	totalNumSpins=get_option(inputN,inputV,"N");
-	gridSize=get_option(inputN,inputV,"gridsize");
-	long unsigned int seed=get_option(inputN,inputV,"randomseed");
-	string initconf=get_string_option(inputN,inputV,"initconf");
-    deltaOption=get_option(inputN,inputV,"delta");
-    bool configOutputs = get_option(inputN,inputV,"configoutput");
+    // read it parameters from command-line arguments and define derived quantities
     
-    double NNint = get_option(inputN,inputV,"NNint");
-	
-	maxtime=60*60*maxtime*1000;
-	if(totalNumSpins<100) totalNumSpins=5000;
-	if(maxsteps==0) maxsteps=1e12;
-	if(temproundsteps>maxsteps) temproundsteps=int(maxsteps/1000.);
-	if(temproundsteps<10) temproundsteps=totalNumSpins;
-	if(temperature<EPS) temperature=25.;
-	if(finaltemperature<EPS) finaltemperature=0.1;
-	if(numberannealingsteps<EPS) numberannealingsteps=1000;
-	tempScaling=pow((finaltemperature/temperature),1./double(numberannealingsteps));
-	int outputconfigbeforetherm=numberannealingsteps/100; int annealingcounter=0; int maxoutputconfigs=200;	//for output config dat
-	
-	cellSize=1./sqrt(double(totalNumSpins));
-	if( (gridSize<10) || (totalNumSpins > gridSize*gridSize) ) gridSize=2*int(sqrt(double(totalNumSpins))+EPS)+2*int(3*d/cellSize+EPS);
+	double d=get_option<double>(inputN,inputV,"d");					//grasshopper hopping distance
+    if (d < EPS) throw invalid_argument("Error: Hopping distance 'd' must be supplied and must be positive.");
+    
+    try {
+        totalNumSpins=get_option<unsigned int>(inputN,inputV,"N");
+        if(totalNumSpins < EPS) throw invalid_argument("Number of spins 'N' not supplied or invalid"); 
+    }
+    catch(const invalid_argument& e) {
+        totalNumSpins=10000;
+        cerr << e.what() << " - Setting N = " << totalNumSpins << endl;
+    }
+    cellSize=1./sqrt(double(totalNumSpins));
+    
+    try {
+    gridSize=get_option<unsigned int>(inputN,inputV,"gridsize");
+    if( (gridSize < EPS) || (totalNumSpins > gridSize*gridSize) ) throw invalid_argument("Grid size not supplied or invalid"); 
+    }
+    catch(const invalid_argument& e) {
+        gridSize=2*int(sqrt(double(totalNumSpins)) + 3*d/cellSize + EPS);
+        cerr << e.what() << " - Setting gridSize = " << gridSize << endl;
+    }
 	gridArea = gridSize*gridSize;
+    
+    double maxtime=get_option<double>(inputN,inputV,"hours");
+    maxtime=60*60*maxtime*1000;
+    
+    long unsigned int maxsteps=get_option<long unsigned int>(inputN,inputV,"steps");
+    if(maxsteps < EPS) maxsteps=1e12; //default large value, maximal duration determined by run time
+    
+	long unsigned int temproundsteps=get_option<long unsigned int>(inputN,inputV,"tempsteps");
+    if(temproundsteps>maxsteps) temproundsteps=int(maxsteps/1000.);
+    if(temproundsteps<10) temproundsteps=totalNumSpins;
+    
+	double temperature=get_option<double>(inputN,inputV,"inittemp");
+	double finaltemperature=get_option<double>(inputN,inputV,"fintemp");
+    if(temperature<EPS) temperature=20.;
+	if(finaltemperature<EPS) finaltemperature=0.01;
+    
+	int numberannealingsteps=get_option<int>(inputN,inputV,"annealsteps");
+	if(numberannealingsteps<EPS) numberannealingsteps=1000;
+    tempScaling=pow((finaltemperature/temperature),1./double(numberannealingsteps));
+    bool configOutputs = get_option<bool>(inputN,inputV,"configoutput"); // whether to save configuration snapshots for animation
+    int outputconfigbeforetherm=numberannealingsteps/100; int annealingcounter=0; int maxoutputconfigs=200;	// limits config.dat file size
+	
+	string initconf=get_option<string>(inputN,inputV,"initconf");
+    deltaOption=get_option<int>(inputN,inputV,"delta");
+
+    double NNint = get_option<double>(inputN,inputV,"NNint");
     
     // one factor of 1/2 is already taken care of by avoiding double counting
     double probabilityNormFactor = 1/PI/d/pow(double(totalNumSpins),3./2.);
     
 	gsl_rng * RNG = gsl_rng_alloc (gsl_rng_mt19937);
-    if(seed==0) seed=std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    long unsigned int seed=get_option<long unsigned int>(inputN,inputV,"randomseed");
+    // Use system clock if no random seed supplied (seed is always output)
+    if(seed < EPS) seed=chrono::duration_cast<chrono::seconds>(chrono::system_clock::now().time_since_epoch()).count();
 	gsl_rng_set (RNG, seed);
 	
 	unsigned int temproundcounter=0;
@@ -76,7 +98,7 @@ int main(int inputN,char *inputV[]) {
     auto begin = chrono::high_resolution_clock::now();
     
     // CONSTRUCT NEIGHBOR LIST ---------------------------------------------------------------------------  
-    
+
     vector< pair<int,double> > dNeighbourTemplate;
 	vector< pair<int,double> > dNeighbourTable[gridArea];	//for each grid point: list of points that are its d-neighbours with corresponding energies
     
@@ -189,23 +211,26 @@ int main(int inputN,char *inputV[]) {
             energyDifference -= contributionEnergy(d,euclideanDistance( findPosition(newSpinCoord),findPosition(oldSpinCoord) ));
             }
         // Nearest neighbor contributions
-        //down
-        if(newSpinCoord>=gridSize && newSpinCoord-gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-gridSize];
-        if(oldSpinCoord>=gridSize && oldSpinCoord-gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-gridSize];
-        //up
-        if(newSpinCoord<gridSize*(gridSize-1) && newSpinCoord+gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+gridSize];
-        if(oldSpinCoord<gridSize*(gridSize-1) && oldSpinCoord+gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+gridSize];
-            
-        int gridLocationx = xcoord(newSpinCoord);
-        //left
-        if(gridLocationx != 0 && newSpinCoord-1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-1];
-        //right
-        if(gridLocationx != gridSize-1 && newSpinCoord+1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+1];
-        gridLocationx = xcoord(oldSpinCoord);
-        //left
-        if(gridLocationx != 0 && oldSpinCoord-1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-1];
-        //right
-        if(gridLocationx != gridSize-1 && oldSpinCoord+1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+1];
+        if(abs(NNint) > EPS)
+            {
+            //down
+            if(newSpinCoord>=gridSize && newSpinCoord-gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-gridSize];
+            if(oldSpinCoord>=gridSize && oldSpinCoord-gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-gridSize];
+            //up
+            if(newSpinCoord<gridSize*(gridSize-1) && newSpinCoord+gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+gridSize];
+            if(oldSpinCoord<gridSize*(gridSize-1) && oldSpinCoord+gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+gridSize];
+                
+            int gridLocationx = xcoord(newSpinCoord);
+            //left
+            if(gridLocationx != 0 && newSpinCoord-1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-1];
+            //right
+            if(gridLocationx != gridSize-1 && newSpinCoord+1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+1];
+            gridLocationx = xcoord(oldSpinCoord);
+            //left
+            if(gridLocationx != 0 && oldSpinCoord-1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-1];
+            //right
+            if(gridLocationx != gridSize-1 && oldSpinCoord+1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+1];
+            }
 
 		bool accept;
 		if(energyDifference>=0) accept=true;
@@ -276,7 +301,7 @@ int main(int inputN,char *inputV[]) {
     temperatures.flush();
     energies.flush();
     
-	result << "\n Simulation took " << timeDiff/60./1000 << " minutes" << '\n'
+	result << "\nSimulation took " << timeDiff/60./1000 << " minutes" << '\n'
 	       << "Finished after " << counter << " steps" << '\n'
 	       << "Final temperature: " << temperature << '\n'
 	       << "Average acceptance ratio: " << accepted/double(counter) << "\n\n"
@@ -286,10 +311,8 @@ int main(int inputN,char *inputV[]) {
            << "best probability: " << bestenergy*probabilityNormFactor << "\n\n";
     
     if(!configOutputs) {remove("config.dat");}
-    ofstream finconf("finconf.dat");
-    saveConfig(spinArray, finconf);
-	ofstream bestconf("bestconf.dat");
-    saveConfig(bestSpinArray, bestconf);
+    saveConfig(spinArray, "finconf.dat");
+    saveConfig(bestSpinArray, "bestconf.dat");
     
     return 0;
 }
