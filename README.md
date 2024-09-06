@@ -23,7 +23,7 @@ To compile the code, type `make` in the shell while in the folder containing the
 | `-inittemp`     | initial temperature |
 | `-fintemp`      | final temperature (need to run long enough to reach it) |
 | `-annealsteps`  | number of simulated annealing steps between initial and final temperature |
-| `-configoutput` | whether to output `config.dat`, see below; takes values `0` (default, no output) or `1` |
+| `-configoutput` | maximal number of configurations in `config.dat`, see below; default is `0` (no output) |
 | `-initconf`     | how to initialise the system: currently implemented: `random` (default) or `load` (load configuration from file called `initconf.dat`) |
 | `-delta`        | choice of delta-function discretization (two options implemented, see code)
 | `-NNint`        | nearest neighbor interaction coefficient (0 by default) |

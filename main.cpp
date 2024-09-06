@@ -60,8 +60,8 @@ int main(int inputN,char *inputV[]) {
 	int numberannealingsteps=get_option<int>(inputN,inputV,"annealsteps");
 	if(numberannealingsteps<EPS) numberannealingsteps=1000;
     tempScaling=pow((finaltemperature/temperature),1./double(numberannealingsteps));
-    bool configOutputs = get_option<bool>(inputN,inputV,"configoutput"); // whether to save configuration snapshots for animation
-    int outputconfigbeforetherm=numberannealingsteps/100; int annealingcounter=0; int maxoutputconfigs=200;	// limits config.dat file size
+    int configOutputs = get_option<int>(inputN,inputV,"configoutput"); // maximal number of configuration snapshots to save for animation
+    int outputconfigbeforetherm=numberannealingsteps/100; int annealingcounter=0;
 	
 	string initconf=get_option<string>(inputN,inputV,"initconf");
     deltaOption=get_option<int>(inputN,inputV,"delta");
@@ -181,7 +181,7 @@ int main(int inputN,char *inputV[]) {
 	energies.write(to_string(energy*probabilityNormFactor));
     BufferedFileWriter temperatures("temperatures.dat", bufferLimit, chrono::milliseconds(flushInterval));
 	ofstream configuration("config.dat");
-	if(configOutputs)
+	if(configOutputs > 0)
         {
         ostringstream buffer;
         for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
@@ -264,7 +264,7 @@ int main(int inputN,char *inputV[]) {
 			if(temperature>finaltemperature) 
 				{
 				temperature=temperatureDecrease(temperature);
-				if(annealingcounter%outputconfigbeforetherm==0 && configOutputs) 
+				if(annealingcounter%outputconfigbeforetherm==0 && configOutputs > 0) 
 					{
                     ostringstream buffer;
                     for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
@@ -273,16 +273,13 @@ int main(int inputN,char *inputV[]) {
                     }
 				annealingcounter++;
 				}
-			else if(annealingcounter<maxoutputconfigs)
+			else if(annealingcounter<configOutputs)
 				{
 				annealingcounter++; 
-                if(configOutputs)
-					{
-                    ostringstream buffer;
-                    for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-                    buffer << energy*probabilityNormFactor << endl;
-                    configuration << buffer.str();
-                    }
+                ostringstream buffer;
+                for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
+                buffer << energy*probabilityNormFactor << endl;
+                configuration << buffer.str();
 				}
 			accratio=accepted_current/double(temproundcounter);
             temperatures.write(to_string(counter) + '\t' + to_string(temperature) + '\t' + to_string(accratio));
@@ -310,7 +307,7 @@ int main(int inputN,char *inputV[]) {
            << "final probability: " << energy*probabilityNormFactor << '\n'
            << "best probability: " << bestenergy*probabilityNormFactor << "\n\n";
     
-    if(!configOutputs) {remove("config.dat");}
+    if(configOutputs==0) {remove("config.dat");}
     saveConfig(spinArray, "finconf.dat");
     saveConfig(bestSpinArray, "bestconf.dat");
     
