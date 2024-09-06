@@ -41,26 +41,72 @@ void initLoad(bool grid[], int spinArray[]) {
 		
 
 void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
+	{
+	for(unsigned int i=0;i<gridArea;i++)
 		{
-		for(unsigned int i=0;i<gridArea;i++)
-			{
-			grid[i]=false;
-			}
-		int newSpinCoord; 
-        unsigned int spincounter=0;
-		while(spincounter<totalNumSpins)
-			{
-			bool create=true;
-			while(create==true)
-				{
-				newSpinCoord=gsl_rng_uniform_int (RNG, gridArea);
-				create=grid[newSpinCoord];
-				}
-			grid[newSpinCoord]=true;
-			spinArray[spincounter]=newSpinCoord;
-			spincounter++;
-			}
+		grid[i]=false;
 		}
+	int newSpinCoord; 
+    unsigned int spincounter=0;
+	while(spincounter<totalNumSpins)
+		{
+		bool create=true;
+		while(create==true)
+			{
+			newSpinCoord=gsl_rng_uniform_int (RNG, gridArea);
+			create=grid[newSpinCoord];
+			}
+		grid[newSpinCoord]=true;
+		spinArray[spincounter]=newSpinCoord;
+		spincounter++;
+		}
+	}
+		
+void initDisk(bool grid[], int spinArray[]) {
+	
+    // unless the number of spins matches perfectly the number required to shape the full disk 
+    // the disk will not have complete shells
+    // this is a small additional systematic error, but it will not substantially affect the end result
+    
+    double radius=1./sqrt(PI);
+    pair<double,double> center=findPosition(gridSize*gridSize/2+gridSize/2);
+	unsigned int spincounter=0;
+    
+    // fill inner part of the disk
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        grid[i]=false;
+        if(spincounter<totalNumSpins)
+            {
+            pair<double,double> thisPoint=findPosition(i);
+            if(euclideanDistance(center,thisPoint)<radius)
+                {
+                grid[i]=true; 
+                spinArray[spincounter]=i;
+                spincounter++;
+                }
+            }
+        }
+        
+    // put remaining spins (if any) into outside layer
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        if( (spincounter<totalNumSpins) && (grid[i]==false) )
+            {
+            pair<double,double> thisPoint=findPosition(i);
+            if(euclideanDistance(center,thisPoint)<radius+cellSize)
+                {
+                grid[i]=true; 
+                spinArray[spincounter]=i;
+                spincounter++;
+                }
+            }
+        }
+     
+    if (spincounter != totalNumSpins)
+        throw runtime_error("Error: Incorrect number of spins in disk initialization.");
+    
+}
 
 void saveConfig(int *spinArray, const string& filename) {
     ofstream file;
@@ -79,6 +125,7 @@ void initialize(bool grid[], int spinArray[], gsl_rng* RNG, string initconf) {
     try {
         if (initconf == "random") initRandom(grid, spinArray, RNG);
         else if (initconf == "load") initLoad(grid, spinArray);
+        else if (initconf == "disk") initDisk(grid, spinArray);
         else throw logic_error("Warning: Initialization not specified or invalid.");
         }
     catch (const logic_error& e) {

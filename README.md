@@ -24,7 +24,7 @@ To compile the code, type `make` in the shell while in the folder containing the
 | `-fintemp`      | final temperature (need to run long enough to reach it) |
 | `-annealsteps`  | number of simulated annealing steps between initial and final temperature |
 | `-configoutput` | maximal number of configurations in `config.dat`, see below; default is `0` (no output) |
-| `-initconf`     | how to initialise the system: currently implemented: `random` (default) or `load` (load configuration from file called `initconf.dat`) |
+| `-initconf`     | how to initialise the system: currently implemented: `random` (default), `disk`, or `load` (load configuration from file called `initconf.dat`) |
 | `-delta`        | choice of delta-function discretization (two options implemented, see code)
 | `-NNint`        | nearest neighbor interaction coefficient (0 by default) |
 | `-randomseed`   | initial value for the random number generator (if none specified will generate a random seed based on the system clock) |
