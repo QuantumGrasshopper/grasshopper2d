@@ -16,7 +16,7 @@ To compile the code, type `make` in the shell while in the folder containing the
 | --------------- | ------------------ |
 | `-d`            | grasshopper jump distance in regular length units (unit in which the lawn area is 1), e.g. 0.1 or 0.5 or 2 or 10 |
 | `-N`            | total number of grid points with spin 1 (10000 is default) |
-| `-gridsize`     | for square grid length of square edge (number of cells) |
+| `-gridsize`     | square-grid edge length in cells; must satisfy `floor((gridsize - 1)/2) >= ceil(d/cellSize) + 1`, where `cellSize=1/sqrt(N)`; undersized grids are rejected |
 | `-hours`        | how many hours the code should run (can be less than 1 hour), e.g. 0.1, 0.5, 2, 48, can also be 0 (default value) if you only want to look at the initial configuration |
 | `-steps`        | how many steps the code should maximally run (`1e12` by default), but code will terminate earlier if maximal time is reached |
 | `-tempsteps`    | initial number of steps before first temperature decrease (the number of steps between decreases goes up with each round) |

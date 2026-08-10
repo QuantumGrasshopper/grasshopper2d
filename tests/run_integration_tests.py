@@ -30,7 +30,37 @@ def read_configuration(path, expected_count, grid_area):
             f"{path.name} contains an out-of-bounds coordinate")
 
 
-def direct_pairwise_probability(coordinates, grid_size, hopping_distance):
+# Independent reference implementation of the delta-function discretizations,
+# to compute direct pairwise probabilities without using production neighbor-table code
+def reference_contribution_energy(normalized_offset, delta_option):
+    if normalized_offset > 2.0:
+        return 0.0
+
+    if delta_option == 0:
+        return (1.0 + math.cos(math.pi * normalized_offset / 2.0)) / 4.0
+
+    if normalized_offset < 1.0:
+        return (17.0 / 48.0 + math.sqrt(3.0) * math.pi / 108.0
+                + normalized_offset / 4.0 - normalized_offset ** 2 / 4.0
+                + (1.0 - 2.0 * normalized_offset)
+                * math.sqrt(1.0 + 12.0 * normalized_offset
+                            * (1.0 - normalized_offset)) / 16.0
+                - math.sqrt(3.0)
+                * math.asin(math.sqrt(3.0) * (2.0 * normalized_offset - 1.0) / 2.0)
+                / 12.0)
+    if normalized_offset < 2.0:
+        return (55.0 / 48.0 - math.sqrt(3.0) * math.pi / 108.0
+                - 13.0 * normalized_offset / 12.0 + normalized_offset ** 2 / 4.0
+                + (2.0 * normalized_offset - 3.0)
+                * math.sqrt(36.0 * normalized_offset - 23.0
+                            - 12.0 * normalized_offset ** 2) / 48.0
+                + math.sqrt(3.0)
+                * math.asin(math.sqrt(3.0) * (2.0 * normalized_offset - 3.0) / 2.0)
+                / 36.0)
+    return 0.0
+
+
+def direct_pairwise_probability(coordinates, grid_size, hopping_distance, delta_option):
     cell_size = 1.0 / math.sqrt(len(coordinates))
     energy = 0.0
 
@@ -42,8 +72,7 @@ def direct_pairwise_probability(coordinates, grid_size, hopping_distance):
             second_y = second_coordinate // grid_size
             distance = cell_size * math.hypot(first_x - second_x, first_y - second_y)
             normalized_offset = abs(hopping_distance - distance) / cell_size
-            if normalized_offset <= 2.0:
-                energy += (1.0 + math.cos(math.pi * normalized_offset / 2.0)) / 4.0
+            energy += reference_contribution_energy(normalized_offset, delta_option)
 
     normalization = math.pi * hopping_distance * len(coordinates) ** 1.5
     return energy / normalization
@@ -110,57 +139,93 @@ def main():
                 require(configuration_path.is_file(), f"{filename} was not created")
                 read_configuration(configuration_path, expected_count=4, grid_area=64)
 
-        odd_grid_coordinates = [11, 12]
         hopping_distance = 1.5
-        command = [
-            str(executable),
-            "-N", "2",
-            "-gridsize", "5",
-            "-d", str(hopping_distance),
-            "-hours", "1",
-            "-steps", "1",
-            "-tempsteps", "10",
-            "-inittemp", "20",
-            "-fintemp", "0.05",
-            "-annealsteps", "100",
-            "-configoutput", "0",
-            "-initconf", "load",
-            "-delta", "0",
-            "-NNint", "0",
-            "-randomseed", "12345",
+        valid_reach_cases = [
+            ("odd minimum-valid grid", 9, 0, [38, 42]),
+            ("even minimum-valid grid", 10, 1, [53, 57]),
         ]
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-odd-grid-") as directory:
-            working_directory = pathlib.Path(directory)
-            (working_directory / "initconf.dat").write_text("11\n12\n", encoding="utf-8")
-            completed = subprocess.run(
-                command,
-                cwd=working_directory,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
+        for case_name, case_grid_size, delta_option, coordinates in valid_reach_cases:
+            command = [
+                str(executable),
+                "-N", "2",
+                "-gridsize", str(case_grid_size),
+                "-d", str(hopping_distance),
+                "-hours", "1",
+                "-steps", "1",
+                "-tempsteps", "10",
+                "-inittemp", "20",
+                "-fintemp", "0.05",
+                "-annealsteps", "100",
+                "-configoutput", "0",
+                "-initconf", "load",
+                "-delta", str(delta_option),
+                "-NNint", "0",
+                "-randomseed", "12345",
+            ]
 
-            require(completed.returncode == 0,
-                    f"odd-grid grasshopper run exited with status {completed.returncode}")
+            with tempfile.TemporaryDirectory(prefix="grasshopper2d-valid-reach-") as directory:
+                working_directory = pathlib.Path(directory)
+                configuration = "".join(f"{coordinate}\n" for coordinate in coordinates)
+                (working_directory / "initconf.dat").write_text(
+                    configuration, encoding="utf-8")
+                completed = subprocess.run(
+                    command,
+                    cwd=working_directory,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
 
-            energy_lines = (working_directory / "energies.dat").read_text(
-                encoding="utf-8").splitlines()
-            require(energy_lines, "odd-grid energies.dat is empty")
-            try:
-                table_probability = float(energy_lines[0])
-            except ValueError as error:
-                raise IntegrationTestFailure(
-                    "odd-grid energies.dat does not begin with a number") from error
+                require(completed.returncode == 0,
+                        f"{case_name} exited with status {completed.returncode}")
 
-            direct_probability = direct_pairwise_probability(
-                odd_grid_coordinates, grid_size=5, hopping_distance=hopping_distance)
-            require(math.isclose(table_probability, direct_probability,
-                                 rel_tol=0.0, abs_tol=5.1e-7),
-                    "odd-grid neighbor-table probability "
-                    f"{table_probability:.17g} does not match direct pairwise probability "
-                    f"{direct_probability:.17g}")
+                energy_lines = (working_directory / "energies.dat").read_text(
+                    encoding="utf-8").splitlines()
+                require(energy_lines, f"{case_name} produced an empty energies.dat")
+                try:
+                    table_probability = float(energy_lines[0])
+                except ValueError as error:
+                    raise IntegrationTestFailure(
+                        f"{case_name} energies.dat does not begin with a number") from error
+
+                direct_probability = direct_pairwise_probability(
+                    coordinates, case_grid_size, hopping_distance, delta_option)
+                require(math.isclose(table_probability, direct_probability,
+                                     rel_tol=0.0, abs_tol=5.1e-7),
+                        f"{case_name} neighbor-table probability "
+                        f"{table_probability:.17g} does not match direct pairwise probability "
+                        f"{direct_probability:.17g}")
+
+        invalid_reach_cases = [
+            ("undersized odd grid", 7, 0),
+            ("undersized even grid", 8, 1),
+        ]
+        expected_error = "Grid size is too small for the hopping-distance support."
+
+        for case_name, case_grid_size, delta_option in invalid_reach_cases:
+            command = [
+                str(executable),
+                "-N", "2",
+                "-gridsize", str(case_grid_size),
+                "-d", str(hopping_distance),
+                "-delta", str(delta_option),
+            ]
+
+            with tempfile.TemporaryDirectory(prefix="grasshopper2d-invalid-reach-") as directory:
+                completed = subprocess.run(
+                    command,
+                    cwd=directory,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False,
+                )
+
+                require(completed.returncode != 0, f"{case_name} was not rejected")
+                require(expected_error in completed.stderr,
+                        f"{case_name} did not report the reach validation error")
 
     except (IntegrationTestFailure, OSError, subprocess.SubprocessError) as error:
         print(f"integration tests: FAIL: {error}", file=sys.stderr)
@@ -172,7 +237,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration tests: PASS (2 tests)")
+    print("integration tests: PASS (5 tests)")
     return 0
 
 
