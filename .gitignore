@@ -23,5 +23,6 @@
 *.out
 *.app
 grasshopper
+/tests/grasshopper_tests
 runs/
 /benchmarks/results/
