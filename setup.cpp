@@ -28,6 +28,10 @@ void initLoad(unsigned char grid[], int spinArray[]) {
             throw runtime_error("Error: spinArray[i] value is out of current grid bounds.");
             }
 
+        if (grid[spinArray[i]] == true) {
+            throw runtime_error("Error: Duplicate coordinate in initconf.dat.");
+            }
+
         grid[spinArray[i]] = true;
     }
 

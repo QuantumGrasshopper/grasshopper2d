@@ -142,3 +142,23 @@ TEST_CASE("valid configurations survive a save-load round trip") {
     CHECK(loadedSpins == expectedSpins);
     checkConfiguration(loadedGrid, loadedSpins);
 }
+
+TEST_CASE("loading rejects duplicate coordinates") {
+    totalNumSpins = 3;
+    cellSize = 1.0 / std::sqrt(static_cast<double>(totalNumSpins));
+    gridSize = 4;
+    gridArea = gridSize * gridSize;
+    tempScaling = 1.0;
+    deltaOption = 0;
+
+    ScopedTemporaryDirectory temporaryDirectory;
+    {
+        std::ofstream configurationFile("initconf.dat");
+        REQUIRE(configurationFile.is_open());
+        configurationFile << "0\n0\n5\n";
+    }
+
+    std::vector<unsigned char> grid(gridArea);
+    std::vector<int> spins(totalNumSpins);
+    CHECK_THROWS_AS(initLoad(grid.data(), spins.data()), std::runtime_error);
+}
