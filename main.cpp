@@ -100,7 +100,7 @@ int main(int inputN,char *inputV[]) {
     // CONSTRUCT NEIGHBOR LIST ---------------------------------------------------------------------------  
 
     vector< pair<int,double> > dNeighbourTemplate;
-	vector< pair<int,double> > dNeighbourTable[gridArea];	//for each grid point: list of points that are its d-neighbours with corresponding energies
+	std::vector<std::vector<std::pair<int,double>>> dNeighbourTable(gridArea);	//for each grid point: list of points that are its d-neighbours with corresponding energies
     
     int center = gridSize*gridSize/2+gridSize/2;
     double thisEnergyContribution;
@@ -136,12 +136,12 @@ int main(int inputN,char *inputV[]) {
     
     // INITIAL SPIN CONFIGURATION ------------------------------------------------------------------------
     
-    bool grid[gridArea];					     //true if spin=1 at this grid point
-    double energyGrid[gridArea];
-	int spinArray[totalNumSpins];				 //grid point where any spin is
-	int noSpinArray[gridArea-totalNumSpins];	 //complementary to above: grid point where no spin is
+    std::vector<unsigned char> grid(gridArea);          //true if spin=1 at this grid point
+    std::vector<double> energyGrid(gridArea);
+	std::vector<int> spinArray(totalNumSpins);          //grid point where any spin is
+	std::vector<int> noSpinArray(gridArea-totalNumSpins); //complementary to above: grid point where no spin is
     
-    initialize(grid, spinArray, RNG, initconf);
+    initialize(grid.data(), spinArray.data(), RNG, initconf);
     
     unsigned int noSpinCounter=0;
     double energy = 0;
@@ -189,7 +189,7 @@ int main(int inputN,char *inputV[]) {
         configuration << buffer.str();
         }
     
-	int bestSpinArray[totalNumSpins];	//the overall best spin array during the whole run
+	std::vector<int> bestSpinArray(totalNumSpins);  //the overall best spin array during the whole run
 	for(unsigned int i=0;i<totalNumSpins;i++) bestSpinArray[i]=spinArray[i];
 	double bestenergy=energy;
 		
@@ -308,8 +308,8 @@ int main(int inputN,char *inputV[]) {
            << "best probability: " << bestenergy*probabilityNormFactor << "\n\n";
     
     if(configOutputs==0) {remove("config.dat");}
-    saveConfig(spinArray, "finconf.dat");
-    saveConfig(bestSpinArray, "bestconf.dat");
+    saveConfig(spinArray.data(), "finconf.dat");
+    saveConfig(bestSpinArray.data(), "bestconf.dat");
     
     return 0;
 }

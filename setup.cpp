@@ -2,7 +2,7 @@
 
 using namespace std;
 	
-void initLoad(bool grid[], int spinArray[]) {
+void initLoad(unsigned char grid[], int spinArray[]) {
     
     // Load initial configuration file
     ifstream initconfin("initconf.dat");
@@ -40,7 +40,7 @@ void initLoad(bool grid[], int spinArray[]) {
     }
 		
 
-void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
+void initRandom(unsigned char grid[], int spinArray[], gsl_rng* RNG)
 	{
 	for(unsigned int i=0;i<gridArea;i++)
 		{
@@ -62,7 +62,7 @@ void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
 		}
 	}
 		
-void initDisk(bool grid[], int spinArray[]) {
+void initDisk(unsigned char grid[], int spinArray[]) {
 	
     // unless the number of spins matches perfectly the number required to shape the full disk 
     // the disk will not have complete shells
@@ -121,7 +121,7 @@ void saveConfig(int *spinArray, const string& filename) {
 }
     
     
-void initialize(bool grid[], int spinArray[], gsl_rng* RNG, string initconf) {    
+void initialize(unsigned char grid[], int spinArray[], gsl_rng* RNG, string initconf) {    
     try {
         if (initconf == "random") initRandom(grid, spinArray, RNG);
         else if (initconf == "load") initLoad(grid, spinArray);
