@@ -102,7 +102,7 @@ int main(int inputN,char *inputV[]) {
     vector< pair<int,double> > dNeighbourTemplate;
 	std::vector<std::vector<std::pair<int,double>>> dNeighbourTable(gridArea);	//for each grid point: list of points that are its d-neighbours with corresponding energies
     
-    int center = gridSize*gridSize/2+gridSize/2;
+    int center = (gridSize/2) * gridSize + gridSize/2;
     double thisEnergyContribution;
     pair<double,double> currentPosition=findPosition(center);
     for(unsigned int j=0;j<gridArea;j++)

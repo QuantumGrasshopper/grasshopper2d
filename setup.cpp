@@ -73,7 +73,7 @@ void initDisk(unsigned char grid[], int spinArray[]) {
     // this is a small additional systematic error, but it will not substantially affect the end result
     
     double radius=1./sqrt(PI);
-    pair<double,double> center=findPosition(gridSize*gridSize/2+gridSize/2);
+    pair<double,double> center=findPosition((gridSize/2) * gridSize + gridSize/2);
 	unsigned int spincounter=0;
     
     // fill inner part of the disk

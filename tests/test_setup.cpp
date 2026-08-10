@@ -117,6 +117,24 @@ TEST_CASE("disk initialization produces a valid configuration on an even grid") 
     checkConfiguration(grid, spins);
 }
 
+TEST_CASE("disk initialization is centered on an odd grid") {
+    totalNumSpins = 5;
+    cellSize = 1.0 / std::sqrt(static_cast<double>(totalNumSpins));
+    gridSize = 5;
+    gridArea = gridSize * gridSize;
+    tempScaling = 1.0;
+    deltaOption = 0;
+
+    std::vector<unsigned char> grid(gridArea);
+    std::vector<int> spins(totalNumSpins);
+
+    initDisk(grid.data(), spins.data());
+
+    checkConfiguration(grid, spins);
+    const std::set<int> expectedSpins{7, 11, 12, 13, 17};
+    CHECK(std::set<int>(spins.begin(), spins.end()) == expectedSpins);
+}
+
 TEST_CASE("valid configurations survive a save-load round trip") {
     totalNumSpins = 3;
     cellSize = 1.0 / std::sqrt(static_cast<double>(totalNumSpins));

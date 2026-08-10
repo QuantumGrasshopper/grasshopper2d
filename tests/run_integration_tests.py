@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import math
 import pathlib
 import subprocess
 import sys
@@ -27,6 +28,25 @@ def read_configuration(path, expected_count, grid_area):
             f"{path.name} contains duplicate coordinates")
     require(all(0 <= coordinate < grid_area for coordinate in coordinates),
             f"{path.name} contains an out-of-bounds coordinate")
+
+
+def direct_pairwise_probability(coordinates, grid_size, hopping_distance):
+    cell_size = 1.0 / math.sqrt(len(coordinates))
+    energy = 0.0
+
+    for first_index, first_coordinate in enumerate(coordinates):
+        first_x = first_coordinate % grid_size
+        first_y = first_coordinate // grid_size
+        for second_coordinate in coordinates[first_index + 1:]:
+            second_x = second_coordinate % grid_size
+            second_y = second_coordinate // grid_size
+            distance = cell_size * math.hypot(first_x - second_x, first_y - second_y)
+            normalized_offset = abs(hopping_distance - distance) / cell_size
+            if normalized_offset <= 2.0:
+                energy += (1.0 + math.cos(math.pi * normalized_offset / 2.0)) / 4.0
+
+    normalization = math.pi * hopping_distance * len(coordinates) ** 1.5
+    return energy / normalization
 
 
 def main():
@@ -90,8 +110,60 @@ def main():
                 require(configuration_path.is_file(), f"{filename} was not created")
                 read_configuration(configuration_path, expected_count=4, grid_area=64)
 
+        odd_grid_coordinates = [11, 12]
+        hopping_distance = 1.5
+        command = [
+            str(executable),
+            "-N", "2",
+            "-gridsize", "5",
+            "-d", str(hopping_distance),
+            "-hours", "1",
+            "-steps", "1",
+            "-tempsteps", "10",
+            "-inittemp", "20",
+            "-fintemp", "0.05",
+            "-annealsteps", "100",
+            "-configoutput", "0",
+            "-initconf", "load",
+            "-delta", "0",
+            "-NNint", "0",
+            "-randomseed", "12345",
+        ]
+
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-odd-grid-") as directory:
+            working_directory = pathlib.Path(directory)
+            (working_directory / "initconf.dat").write_text("11\n12\n", encoding="utf-8")
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode == 0,
+                    f"odd-grid grasshopper run exited with status {completed.returncode}")
+
+            energy_lines = (working_directory / "energies.dat").read_text(
+                encoding="utf-8").splitlines()
+            require(energy_lines, "odd-grid energies.dat is empty")
+            try:
+                table_probability = float(energy_lines[0])
+            except ValueError as error:
+                raise IntegrationTestFailure(
+                    "odd-grid energies.dat does not begin with a number") from error
+
+            direct_probability = direct_pairwise_probability(
+                odd_grid_coordinates, grid_size=5, hopping_distance=hopping_distance)
+            require(math.isclose(table_probability, direct_probability,
+                                 rel_tol=0.0, abs_tol=5.1e-7),
+                    "odd-grid neighbor-table probability "
+                    f"{table_probability:.17g} does not match direct pairwise probability "
+                    f"{direct_probability:.17g}")
+
     except (IntegrationTestFailure, OSError, subprocess.SubprocessError) as error:
-        print(f"integration smoke test: FAIL: {error}", file=sys.stderr)
+        print(f"integration tests: FAIL: {error}", file=sys.stderr)
         print("command: " + " ".join(command), file=sys.stderr)
         if completed is not None:
             print("stdout:", file=sys.stderr)
@@ -100,7 +172,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration smoke test: PASS")
+    print("integration tests: PASS (2 tests)")
     return 0
 
 
