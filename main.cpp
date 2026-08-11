@@ -72,7 +72,12 @@ int main(int inputN,char *inputV[]) {
     int numberannealingsteps=parameters.annealingSteps;
     tempScaling=pow((finaltemperature/temperature),1./double(numberannealingsteps));
     int configOutputs = parameters.configurationOutputs; // maximal number of configuration snapshots to save for animation
-    int outputconfigbeforetherm=max(1,numberannealingsteps/100); int annealingcounter=0;
+	const int plannedIntermediateSnapshots = configOutputs >= 2
+	    ? min(configOutputs - 2, numberannealingsteps - 1) : 0;
+	int coolingStageIndex=0;
+	int nextIntermediateSnapshot=1;
+	int configurationsWritten=0;
+	string pendingIntermediateSnapshot;
 	
     string initconf=parameters.initialConfiguration;
     deltaOption=parameters.deltaOption;
@@ -201,17 +206,23 @@ int main(int inputN,char *inputV[]) {
 	energies.write(to_string(energy*probabilityNormFactor));
     BufferedFileWriter temperatures("temperatures.dat", bufferLimit, chrono::milliseconds(flushInterval));
 	ofstream configuration;
+	auto buildConfigurationSnapshot = [&]() {
+		ostringstream buffer;
+		for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
+		buffer << energy*probabilityNormFactor << endl;
+		return buffer.str();
+	};
 	if(configOutputs > 0)
         {
         configuration.open("config.dat");
 		if (!configuration.is_open()) {
 			throw runtime_error("Failed to open output file config.dat.");
 		}
-        ostringstream buffer;
-        for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-        buffer << energy*probabilityNormFactor << endl;
-        configuration << buffer.str();
-		checkOutputStream(configuration, "config.dat", "write");
+		if(configOutputs >= 2) {
+			configuration << buildConfigurationSnapshot();
+			checkOutputStream(configuration, "config.dat", "write");
+			configurationsWritten++;
+		}
         }
     
 	std::vector<int> bestSpinArray(totalNumSpins);  //the overall best spin array during the whole run
@@ -289,24 +300,27 @@ int main(int inputN,char *inputV[]) {
 			if(temperature>finaltemperature) 
 				{
 				temperature=temperatureDecrease(temperature);
-				if(configOutputs > 0 && annealingcounter%outputconfigbeforetherm==0)
-					{
-                    ostringstream buffer;
-                    for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-                    buffer << energy*probabilityNormFactor << endl;
-                    configuration << buffer.str();
+				coolingStageIndex++;
+
+				if(!pendingIntermediateSnapshot.empty()) {
+					configuration << pendingIntermediateSnapshot;
 					checkOutputStream(configuration, "config.dat", "write");
-                    }
-				annealingcounter++;
+					configurationsWritten++;
+					pendingIntermediateSnapshot.clear();
 				}
-			else if(annealingcounter<configOutputs)
-				{
-				annealingcounter++; 
-                ostringstream buffer;
-                for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-                buffer << energy*probabilityNormFactor << endl;
-                configuration << buffer.str();
-				checkOutputStream(configuration, "config.dat", "write");
+
+				if(nextIntermediateSnapshot <= plannedIntermediateSnapshots) {
+					const int intermediateTarget = static_cast<int>(
+						static_cast<long long>(nextIntermediateSnapshot)
+						* numberannealingsteps
+						/ (plannedIntermediateSnapshots + 1));
+					if(coolingStageIndex == intermediateTarget) {
+						// Hold this row until a later cooling stage so an early stop
+						// replaces it with the actual final configuration instead.
+						pendingIntermediateSnapshot = buildConfigurationSnapshot();
+						nextIntermediateSnapshot++;
+					}
+				}
 				}
 			accratio=accepted_current/double(temproundcounter);
             temperatures.write(to_string(counter) + '\t' + to_string(temperature) + '\t' + to_string(accratio));
@@ -340,6 +354,12 @@ int main(int inputN,char *inputV[]) {
 	checkOutputStream(result, "result.dat", "write");
 
 	if (configOutputs > 0) {
+		if(configurationsWritten < configOutputs
+		   && (configurationsWritten == 0 || counter > 0)) {
+			configuration << buildConfigurationSnapshot();
+			checkOutputStream(configuration, "config.dat", "write");
+			configurationsWritten++;
+		}
 		finishOutputFile(configuration, "config.dat");
 	}
 	finishOutputFile(result, "result.dat");

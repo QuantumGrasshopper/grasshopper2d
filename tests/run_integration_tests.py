@@ -51,6 +51,29 @@ def read_configuration(path, expected_count, grid_area):
             f"{path.name} contains duplicate coordinates")
     require(all(0 <= coordinate < grid_area for coordinate in coordinates),
             f"{path.name} contains an out-of-bounds coordinate")
+    return coordinates
+
+
+def read_configuration_snapshots(path, expected_count):
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise IntegrationTestFailure(f"could not read {path.name}: {error}") from error
+
+    snapshots = []
+    for line_number, line in enumerate(lines, start=1):
+        fields = line.split()
+        require(len(fields) == expected_count + 1,
+                f"{path.name} line {line_number} has {len(fields)} fields, "
+                f"expected {expected_count + 1}")
+        try:
+            coordinates = [int(field) for field in fields[:-1]]
+            float(fields[-1])
+        except ValueError as error:
+            raise IntegrationTestFailure(
+                f"could not parse {path.name} line {line_number}: {error}") from error
+        snapshots.append(coordinates)
+    return snapshots
 
 
 # Independent reference implementation of the delta-function discretizations,
@@ -344,8 +367,53 @@ def main():
                     f"config-output run exited with status {completed.returncode}")
             config_path = working_directory / "config.dat"
             require(config_path.is_file(), "config-output run did not create config.dat")
-            require(config_path.stat().st_size > 0,
-                    "config-output run created an empty config.dat")
+            snapshots = read_configuration_snapshots(config_path, expected_count=2)
+            require(len(snapshots) == 1,
+                    f"configoutput=1 produced {len(snapshots)} rows, expected 1")
+            final_coordinates = read_configuration(
+                working_directory / "finconf.dat", expected_count=2, grid_area=25)
+            require(snapshots[0] == final_coordinates,
+                    "configoutput=1 row does not match finconf.dat")
+
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-config-schedule-") as directory:
+            working_directory = pathlib.Path(directory)
+            command = [
+                str(executable),
+                "-N", "2",
+                "-gridsize", "5",
+                "-d", "0.25",
+                "-hours", "1",
+                "-steps", "14",
+                "-tempsteps", "2",
+                "-inittemp", "4",
+                "-fintemp", "1",
+                "-annealsteps", "2",
+                "-configoutput", "10",
+                "-randomseed", "12345",
+            ]
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode == 0,
+                    f"configuration-schedule run exited with status {completed.returncode}")
+            snapshots = read_configuration_snapshots(
+                working_directory / "config.dat", expected_count=2)
+            require(len(snapshots) == 3,
+                    f"configuration-schedule run produced {len(snapshots)} rows, expected 3")
+            initial_coordinates = read_configuration(
+                working_directory / "initconf.dat", expected_count=2, grid_area=25)
+            final_coordinates = read_configuration(
+                working_directory / "finconf.dat", expected_count=2, grid_area=25)
+            require(snapshots[0] == initial_coordinates,
+                    "configuration-schedule first row does not match initconf.dat")
+            require(snapshots[-1] == final_coordinates,
+                    "configuration-schedule last row does not match finconf.dat")
 
         output_policy_arguments = [
             "-N", "2",
@@ -463,7 +531,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration tests: PASS (23 tests)")
+    print("integration tests: PASS (24 tests)")
     return 0
 
 

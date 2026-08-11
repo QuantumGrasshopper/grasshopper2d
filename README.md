@@ -23,7 +23,7 @@ To compile the code, type `make` in the shell while in the folder containing the
 | `-inittemp`     | initial temperature (20 by default) |
 | `-fintemp`      | final temperature (0.01 by default; need to run long enough to reach it) |
 | `-annealsteps`  | number of simulated annealing steps between initial and final temperature (1000 by default) |
-| `-configoutput` | maximal number of configurations in `config.dat`, see below; default is `0` (no output) |
+| `-configoutput` | strict maximum number of configurations in `config.dat`, see below; default is `0` (no output) |
 | `-initconf`     | how to initialise the system: currently implemented: `random` (default), `disk`, or `load` (load configuration from file called `initconf.dat`) |
 | `-delta`        | choice of delta-function discretization: exactly `0` (default) or `1` |
 | `-NNint`        | nearest neighbor interaction coefficient (0 by default) |
@@ -48,7 +48,15 @@ file name          | comment
 `bestconf.dat`     | best spin configuration over the whole run
 `energies.dat`     | every annealing round the energy (grasshopper probability) value is written to this file
 `temperatures.dat` | every annealing round prints the counter, the current temperature, and the current acceptance ratio
-`config.dat`       | stores the spin configuration and energy every certain number of steps, can be used to generate animations of the system evolution (no longer output by default)
+`config.dat`       | stores selected spin configurations and energies across the annealing trajectory for animation or analysis (not output by default)
+
+For `-configoutput`, `0` disables `config.dat` and `1` stores only the actual
+final configuration. Values of `2` or more reserve rows for the initial and
+actual final configurations, with up to the remaining maximum distributed
+approximately uniformly over cooling stages (and therefore log temperature).
+Stages are not duplicated when more rows are requested than the annealing
+schedule provides. If a run terminates early, its actual final configuration
+is still the last row.
 
 By default, a run is rejected before creating files if any standard output file
 listed above already exists. With `-overwrite 1`, the complete standard output
