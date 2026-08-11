@@ -16,6 +16,29 @@ def require(condition, message):
         raise IntegrationTestFailure(message)
 
 
+def require_invalid_invocation(executable, arguments, expected_error, case_name):
+    sentinel = "existing result must remain unchanged\n"
+    with tempfile.TemporaryDirectory(prefix="grasshopper2d-invalid-cli-") as directory:
+        working_directory = pathlib.Path(directory)
+        result_path = working_directory / "result.dat"
+        result_path.write_text(sentinel, encoding="utf-8")
+        completed = subprocess.run(
+            [str(executable), *arguments],
+            cwd=working_directory,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        require(completed.returncode != 0, f"{case_name} was not rejected")
+        require(expected_error in completed.stderr,
+                f"{case_name} did not report {expected_error!r}; "
+                f"stderr was {completed.stderr!r}")
+        require(result_path.read_text(encoding="utf-8") == sentinel,
+                f"{case_name} truncated result.dat")
+
+
 def read_configuration(path, expected_count, grid_area):
     try:
         coordinates = [int(line) for line in path.read_text(encoding="utf-8").splitlines()]
@@ -205,27 +228,61 @@ def main():
         expected_error = "Grid size is too small for the hopping-distance support."
 
         for case_name, case_grid_size, delta_option in invalid_reach_cases:
-            command = [
-                str(executable),
+            arguments = [
                 "-N", "2",
                 "-gridsize", str(case_grid_size),
                 "-d", str(hopping_distance),
                 "-delta", str(delta_option),
             ]
+            require_invalid_invocation(executable, arguments, expected_error, case_name)
 
-            with tempfile.TemporaryDirectory(prefix="grasshopper2d-invalid-reach-") as directory:
-                completed = subprocess.run(
-                    command,
-                    cwd=directory,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                    check=False,
-                )
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-defaults-") as directory:
+            working_directory = pathlib.Path(directory)
+            command = [str(executable), "-d", "0.25", "-N", "2", "-gridsize", "5"]
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            require(completed.returncode == 0,
+                    f"default-option run exited with status {completed.returncode}")
+            result_text = (working_directory / "result.dat").read_text(encoding="utf-8")
+            require("Initial temperature: 20" in result_text,
+                    "default-option run did not use the default initial temperature")
+            require("Final temperature: 0.01" in result_text,
+                    "default-option run did not use the default final temperature")
+            require("Number of annealing steps: 1000" in result_text,
+                    "default-option run did not use the default annealing steps")
 
-                require(completed.returncode != 0, f"{case_name} was not rejected")
-                require(expected_error in completed.stderr,
-                        f"{case_name} did not report the reach validation error")
+        invalid_cli_cases = [
+            ("missing required d", [], "Required option -d"),
+            ("unknown option", ["-d", "0.25", "-bogus", "1"],
+             "Unknown option: -bogus"),
+            ("duplicate option", ["-d", "0.25", "-d", "0.5"],
+             "Duplicate option: -d"),
+            ("missing option value", ["-d"], "Missing value for option -d"),
+            ("partial numeric value", ["-d", "0.25", "-steps", "10abc"],
+             "Invalid value for -steps"),
+            ("non-finite floating-point value", ["-d", "0.25", "-NNint", "nan"],
+             "Invalid value for -NNint"),
+            ("negative unsigned value", ["-d", "0.25", "-randomseed", "-1"],
+             "Invalid value for -randomseed"),
+            ("out-of-range value", ["-d", "0.25", "-N", "4294967296"],
+             "outside the destination type range"),
+            ("invalid initialization mode", ["-d", "0.25", "-initconf", "Random"],
+             "-initconf must be exactly random, disk, or load"),
+            ("invalid delta option", ["-d", "0.25", "-delta", "2"],
+             "-delta must be exactly 0 or 1"),
+            ("full occupancy", ["-d", "0.1", "-N", "4", "-gridsize", "2"],
+             "N must be smaller than the grid area"),
+        ]
+
+        for case_name, arguments, expected_cli_error in invalid_cli_cases:
+            require_invalid_invocation(
+                executable, arguments, expected_cli_error, case_name)
 
     except (IntegrationTestFailure, OSError, subprocess.SubprocessError) as error:
         print(f"integration tests: FAIL: {error}", file=sys.stderr)
@@ -237,7 +294,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration tests: PASS (5 tests)")
+    print("integration tests: PASS (17 tests)")
     return 0
 
 

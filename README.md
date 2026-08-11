@@ -14,24 +14,26 @@ To compile the code, type `make` in the shell while in the folder containing the
 
 | option          | comment |
 | --------------- | ------------------ |
-| `-d`            | grasshopper jump distance in regular length units (unit in which the lawn area is 1), e.g. 0.1 or 0.5 or 2 or 10 |
+| `-d`            | required positive grasshopper jump distance in regular length units (unit in which the lawn area is 1), e.g. 0.1 or 0.5 or 2 or 10 |
 | `-N`            | total number of grid points with spin 1 (10000 is default) |
-| `-gridsize`     | square-grid edge length in cells; must satisfy `floor((gridsize - 1)/2) >= ceil(d/cellSize) + 1`, where `cellSize=1/sqrt(N)`; undersized grids are rejected |
+| `-gridsize`     | square-grid edge length in cells (automatically sized if omitted); must satisfy `floor((gridsize - 1)/2) >= ceil(d/cellSize) + 1`, where `cellSize=1/sqrt(N)`; undersized grids are rejected |
 | `-hours`        | how many hours the code should run (can be less than 1 hour), e.g. 0.1, 0.5, 2, 48, can also be 0 (default value) if you only want to look at the initial configuration |
 | `-steps`        | how many steps the code should maximally run (`1e12` by default), but code will terminate earlier if maximal time is reached |
-| `-tempsteps`    | initial number of steps before first temperature decrease (the number of steps between decreases goes up with each round) |
-| `-inittemp`     | initial temperature |
-| `-fintemp`      | final temperature (need to run long enough to reach it) |
-| `-annealsteps`  | number of simulated annealing steps between initial and final temperature |
+| `-tempsteps`    | initial number of steps before first temperature decrease (defaults to `N`; the number of steps between decreases goes up with each round) |
+| `-inittemp`     | initial temperature (20 by default) |
+| `-fintemp`      | final temperature (0.01 by default; need to run long enough to reach it) |
+| `-annealsteps`  | number of simulated annealing steps between initial and final temperature (1000 by default) |
 | `-configoutput` | maximal number of configurations in `config.dat`, see below; default is `0` (no output) |
 | `-initconf`     | how to initialise the system: currently implemented: `random` (default), `disk`, or `load` (load configuration from file called `initconf.dat`) |
-| `-delta`        | choice of delta-function discretization (two options implemented, see code)
+| `-delta`        | choice of delta-function discretization: exactly `0` (default) or `1` |
 | `-NNint`        | nearest neighbor interaction coefficient (0 by default) |
-| `-randomseed`   | initial value for the random number generator (if none specified will generate a random seed based on the system clock) |
+| `-randomseed`   | unsigned initial value for the random number generator (if omitted or set to `0`, a seed is generated from the system clock) |
 
 
 Required options: `d`
 Recommended options: `N`, `gridsize`, `hours`
+
+Every option accepts exactly one value and may be supplied at most once. Unknown options, missing values, malformed or out-of-range numbers, and non-finite floating-point values are rejected. The number of spins must satisfy `0 < N < gridsize^2` after automatic or explicit grid sizing.
 
 You can also look into the source code to remind yourself of what the options do.
 
