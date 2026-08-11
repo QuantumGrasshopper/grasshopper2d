@@ -284,6 +284,39 @@ def main():
             require_invalid_invocation(
                 executable, arguments, expected_cli_error, case_name)
 
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-small-anneal-") as directory:
+            working_directory = pathlib.Path(directory)
+            command = [
+                str(executable),
+                "-N", "2",
+                "-gridsize", "5",
+                "-d", "0.25",
+                "-hours", "1",
+                "-steps", "2",
+                "-tempsteps", "2",
+                "-annealsteps", "1",
+                "-configoutput", "0",
+                "-randomseed", "12345",
+            ]
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode == 0,
+                    f"annealsteps=1 run exited with status {completed.returncode}")
+            result_text = (working_directory / "result.dat").read_text(encoding="utf-8")
+            require("Finished after 2 steps" in result_text,
+                    "annealsteps=1 run did not complete both steps")
+            temperature_lines = (working_directory / "temperatures.dat").read_text(
+                encoding="utf-8").splitlines()
+            require(temperature_lines and temperature_lines[0].startswith("2\t"),
+                    "annealsteps=1 run did not execute the cooling step")
+
         output_policy_arguments = [
             "-N", "2",
             "-gridsize", "5",
@@ -400,7 +433,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration tests: PASS (21 tests)")
+    print("integration tests: PASS (22 tests)")
     return 0
 
 

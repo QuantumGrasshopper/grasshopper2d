@@ -72,7 +72,7 @@ int main(int inputN,char *inputV[]) {
     int numberannealingsteps=parameters.annealingSteps;
     tempScaling=pow((finaltemperature/temperature),1./double(numberannealingsteps));
     int configOutputs = parameters.configurationOutputs; // maximal number of configuration snapshots to save for animation
-    int outputconfigbeforetherm=numberannealingsteps/100; int annealingcounter=0;
+    int outputconfigbeforetherm=max(1,numberannealingsteps/100); int annealingcounter=0;
 	
     string initconf=parameters.initialConfiguration;
     deltaOption=parameters.deltaOption;
@@ -280,7 +280,7 @@ int main(int inputN,char *inputV[]) {
 			if(temperature>finaltemperature) 
 				{
 				temperature=temperatureDecrease(temperature);
-				if(annealingcounter%outputconfigbeforetherm==0 && configOutputs > 0) 
+				if(configOutputs > 0 && annealingcounter%outputconfigbeforetherm==0)
 					{
                     ostringstream buffer;
                     for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
