@@ -324,11 +324,15 @@ int main(int inputN,char *inputV[]) {
     
     temperatures.finish();
     energies.finish();
+
+    const long totalAccepted = accepted + accepted_current;
+    const double averageAcceptanceRatio =
+    counter > 0 ? totalAccepted / double(counter) : 0.0;
     
 	result << "\nSimulation took " << timeDiff/60./1000 << " minutes" << '\n'
 	       << "Finished after " << counter << " steps" << '\n'
 	       << "Final temperature: " << temperature << '\n'
-	       << "Average acceptance ratio: " << accepted/double(counter) << "\n\n"
+	       << "Average acceptance ratio: " << averageAcceptanceRatio << "\n\n"
 	       << "final energy: " << energy << '\n'
 	       << "best energy: " << bestenergy << '\n'
            << "final probability: " << energy*probabilityNormFactor << '\n'
