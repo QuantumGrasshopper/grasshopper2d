@@ -14,6 +14,12 @@ using namespace std;
 
 int main(int inputN,char *inputV[]) {
     try {
+    const int outputPrecision=numeric_limits<double>::max_digits10;
+    auto formatDouble = [outputPrecision](double value) {
+        ostringstream buffer;
+        buffer << setprecision(outputPrecision) << value;
+        return buffer.str();
+    };
     
     // SETUP -------------------------------------------------------------------------------------
 	
@@ -99,6 +105,7 @@ int main(int inputN,char *inputV[]) {
 	if (!result.is_open()) {
 		throw runtime_error("Failed to open output file result.dat.");
 	}
+	result << setprecision(outputPrecision);
 	
 	unsigned int temproundcounter=0;
 	double accratio;
@@ -203,13 +210,13 @@ int main(int inputN,char *inputV[]) {
     int bufferLimit = 10000;
     int flushInterval = 60*1000;
     BufferedFileWriter energies("energies.dat", bufferLimit, chrono::milliseconds(flushInterval));
-	energies.write(to_string(energy*probabilityNormFactor));
+	energies.write(formatDouble(energy*probabilityNormFactor));
     BufferedFileWriter temperatures("temperatures.dat", bufferLimit, chrono::milliseconds(flushInterval));
 	ofstream configuration;
 	auto buildConfigurationSnapshot = [&]() {
 		ostringstream buffer;
 		for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-		buffer << energy*probabilityNormFactor << endl;
+		buffer << setprecision(outputPrecision) << energy*probabilityNormFactor << endl;
 		return buffer.str();
 	};
 	if(configOutputs > 0)
@@ -323,8 +330,9 @@ int main(int inputN,char *inputV[]) {
 				}
 				}
 			accratio=accepted_current/double(temproundcounter);
-            temperatures.write(to_string(counter) + '\t' + to_string(temperature) + '\t' + to_string(accratio));
-			energies.write(to_string(energy*probabilityNormFactor));
+            temperatures.write(to_string(counter) + '\t' + formatDouble(temperature)
+                               + '\t' + formatDouble(accratio));
+			energies.write(formatDouble(energy*probabilityNormFactor));
 			accepted+=accepted_current; accepted_current=0;
 			temproundcounter=0;
 			temproundsteps=stepIncrease(temproundsteps);

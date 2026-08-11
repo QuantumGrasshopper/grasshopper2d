@@ -239,7 +239,7 @@ def main():
                 direct_probability = direct_pairwise_probability(
                     coordinates, case_grid_size, hopping_distance, delta_option)
                 require(math.isclose(table_probability, direct_probability,
-                                     rel_tol=0.0, abs_tol=5.1e-7),
+                                     rel_tol=0.0, abs_tol=1.0e-12),
                         f"{case_name} neighbor-table probability "
                         f"{table_probability:.17g} does not match direct pairwise probability "
                         f"{direct_probability:.17g}")
