@@ -70,6 +70,28 @@ private:
     std::filesystem::path temporaryDirectory_;
 };
 
+template<typename Operation>
+void checkRuntimeErrorContains(Operation operation, const std::string& expectedText) {
+    bool threw = false;
+    try {
+        operation();
+    }
+    catch (const std::runtime_error& error) {
+        threw = true;
+        CHECK(std::string(error.what()).find(expectedText) != std::string::npos);
+    }
+    CHECK(threw);
+}
+
+bool devFullAvailable() {
+#ifdef __linux__
+    std::ofstream probe("/dev/full");
+    return probe.is_open();
+#else
+    return false;
+#endif
+}
+
 } // namespace
 
 TEST_CASE("random initialization is reproducible and internally consistent") {
@@ -179,4 +201,35 @@ TEST_CASE("loading rejects duplicate coordinates") {
     std::vector<unsigned char> grid(gridArea);
     std::vector<int> spins(totalNumSpins);
     CHECK_THROWS_AS(initLoad(grid.data(), spins.data()), std::runtime_error);
+}
+
+TEST_CASE("saving configurations reports output open failures") {
+    totalNumSpins = 2;
+    cellSize = 1.0 / std::sqrt(static_cast<double>(totalNumSpins));
+    gridSize = 4;
+    gridArea = gridSize * gridSize;
+    tempScaling = 1.0;
+    deltaOption = 0;
+
+    ScopedTemporaryDirectory temporaryDirectory;
+    std::vector<int> spins{0, 5};
+    const std::string filename = "missing/config.dat";
+    checkRuntimeErrorContains([&spins, &filename]() {
+        saveConfig(spins.data(), filename);
+    }, filename);
+}
+
+TEST_CASE("configuration write failures identify dev full"
+          * doctest::skip(!devFullAvailable())) {
+    totalNumSpins = 2;
+    cellSize = 1.0 / std::sqrt(static_cast<double>(totalNumSpins));
+    gridSize = 4;
+    gridArea = gridSize * gridSize;
+    tempScaling = 1.0;
+    deltaOption = 0;
+
+    std::vector<int> spins{0, 5};
+    checkRuntimeErrorContains([&spins]() {
+        saveConfig(spins.data(), "/dev/full");
+    }, "/dev/full");
 }

@@ -317,6 +317,36 @@ def main():
             require(temperature_lines and temperature_lines[0].startswith("2\t"),
                     "annealsteps=1 run did not execute the cooling step")
 
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-config-output-") as directory:
+            working_directory = pathlib.Path(directory)
+            command = [
+                str(executable),
+                "-N", "2",
+                "-gridsize", "5",
+                "-d", "0.25",
+                "-hours", "1",
+                "-steps", "2",
+                "-tempsteps", "2",
+                "-annealsteps", "100",
+                "-configoutput", "1",
+                "-randomseed", "12345",
+            ]
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode == 0,
+                    f"config-output run exited with status {completed.returncode}")
+            config_path = working_directory / "config.dat"
+            require(config_path.is_file(), "config-output run did not create config.dat")
+            require(config_path.stat().st_size > 0,
+                    "config-output run created an empty config.dat")
+
         output_policy_arguments = [
             "-N", "2",
             "-gridsize", "5",
@@ -433,7 +463,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration tests: PASS (22 tests)")
+    print("integration tests: PASS (23 tests)")
     return 0
 
 

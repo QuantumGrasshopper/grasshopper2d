@@ -91,6 +91,9 @@ int main(int inputN,char *inputV[]) {
 	gsl_rng_set (RNG, seed);
 
     ofstream result("result.dat");
+	if (!result.is_open()) {
+		throw runtime_error("Failed to open output file result.dat.");
+	}
 	
 	unsigned int temproundcounter=0;
 	double accratio;
@@ -109,6 +112,7 @@ int main(int inputN,char *inputV[]) {
 	       << "Temperature scaling factor: " << tempScaling << '\n'
 	       << "Number of annealing steps: " << numberannealingsteps << '\n'
 	       << "Initial number of steps before temperature scaling: " << temproundsteps << "\n\n";
+	checkOutputStream(result, "result.dat", "write");
 
     auto begin = chrono::high_resolution_clock::now();
     
@@ -148,6 +152,7 @@ int main(int inputN,char *inputV[]) {
     auto now = chrono::high_resolution_clock::now();
     auto timeDiff = chrono::duration_cast<chrono::milliseconds>(now-begin).count();
 	result << "Time to construct neighbors list: " << timeDiff << "ms" << endl;
+	checkOutputStream(result, "result.dat", "write");
     
     // INITIAL SPIN CONFIGURATION ------------------------------------------------------------------------
     
@@ -199,10 +204,14 @@ int main(int inputN,char *inputV[]) {
 	if(configOutputs > 0)
         {
         configuration.open("config.dat");
+		if (!configuration.is_open()) {
+			throw runtime_error("Failed to open output file config.dat.");
+		}
         ostringstream buffer;
         for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
         buffer << energy*probabilityNormFactor << endl;
         configuration << buffer.str();
+		checkOutputStream(configuration, "config.dat", "write");
         }
     
 	std::vector<int> bestSpinArray(totalNumSpins);  //the overall best spin array during the whole run
@@ -286,6 +295,7 @@ int main(int inputN,char *inputV[]) {
                     for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
                     buffer << energy*probabilityNormFactor << endl;
                     configuration << buffer.str();
+					checkOutputStream(configuration, "config.dat", "write");
                     }
 				annealingcounter++;
 				}
@@ -296,6 +306,7 @@ int main(int inputN,char *inputV[]) {
                 for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
                 buffer << energy*probabilityNormFactor << endl;
                 configuration << buffer.str();
+				checkOutputStream(configuration, "config.dat", "write");
 				}
 			accratio=accepted_current/double(temproundcounter);
             temperatures.write(to_string(counter) + '\t' + to_string(temperature) + '\t' + to_string(accratio));
@@ -311,8 +322,8 @@ int main(int inputN,char *inputV[]) {
 		
     // WRAP UP --------------------------------------------------------------------------------------------
     
-    temperatures.flush();
-    energies.flush();
+    temperatures.finish();
+    energies.finish();
     
 	result << "\nSimulation took " << timeDiff/60./1000 << " minutes" << '\n'
 	       << "Finished after " << counter << " steps" << '\n'
@@ -322,6 +333,12 @@ int main(int inputN,char *inputV[]) {
 	       << "best energy: " << bestenergy << '\n'
            << "final probability: " << energy*probabilityNormFactor << '\n'
            << "best probability: " << bestenergy*probabilityNormFactor << "\n\n";
+	checkOutputStream(result, "result.dat", "write");
+
+	if (configOutputs > 0) {
+		finishOutputFile(configuration, "config.dat");
+	}
+	finishOutputFile(result, "result.dat");
     
     saveConfig(spinArray.data(), "finconf.dat");
     saveConfig(bestSpinArray.data(), "bestconf.dat");

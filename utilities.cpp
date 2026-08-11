@@ -134,11 +134,31 @@ void prepareOutputFiles(bool overwrite, bool preserveInitialConfiguration) {
     }
 }
 
-BufferedFileWriter::BufferedFileWriter(const string& filename, size_t limit, chrono::milliseconds interval)
-        : bufferLimit(limit), flushInterval(interval) {
+void checkOutputStream(const ostream& stream,
+                       const string& filename,
+                       const char* operation) {
+    if (!stream) {
+        throw runtime_error("Failed to " + string(operation)
+                            + " output file " + filename + ".");
+    }
+}
+
+void finishOutputFile(ofstream& stream, const string& filename) {
+    checkOutputStream(stream, filename, "write");
+    stream.flush();
+    checkOutputStream(stream, filename, "flush");
+    stream.close();
+    checkOutputStream(stream, filename, "close");
+}
+
+BufferedFileWriter::BufferedFileWriter(const string& filename,
+                                       size_t limit,
+                                       chrono::milliseconds interval)
+        : filename(filename), bufferLimit(limit), flushInterval(interval),
+          finishAttempted(false) {
         file.open(filename);
         if (!file.is_open()) {
-            throw runtime_error("Error: Cannot open " + filename + " for writing.");
+            throw runtime_error("Failed to open output file " + filename + ".");
         }
         lastFlushTime = chrono::steady_clock::now();
     }
@@ -157,14 +177,30 @@ void BufferedFileWriter::flush() {
         for (const auto& line : buffer) {
             file << line << '\n';
         }
-        buffer.clear();
+        checkOutputStream(file, filename, "write");
         file.flush();
+        checkOutputStream(file, filename, "flush");
+        buffer.clear();
     }
 
-BufferedFileWriter::~BufferedFileWriter() {
+void BufferedFileWriter::finish() {
+        finishAttempted = true;
         flush();
-        if (file.is_open()) {
-            file.close();
+        file.close();
+        checkOutputStream(file, filename, "close");
+    }
+
+BufferedFileWriter::~BufferedFileWriter() noexcept {
+        if (finishAttempted) {
+            return;
+        }
+        try {
+            flush();
+            if (file.is_open()) {
+                file.close();
+            }
+        }
+        catch (...) {
         }
     }
 

@@ -122,6 +122,7 @@ void saveConfig(int *spinArray, const string& filename) {
     ostringstream buffer;
     for (unsigned int i = 0; i < totalNumSpins; i++) buffer << spinArray[i] << '\n';
     file << buffer.str();
+    finishOutputFile(file, filename);
 }
     
     
