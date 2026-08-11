@@ -69,7 +69,7 @@ int main(int inputN,char *inputV[]) {
     long unsigned int maxsteps=parameters.maxSteps;
     
 	long unsigned int temproundsteps=parameters.temperatureRoundSteps.value_or(0UL);
-    if(temproundsteps>maxsteps) temproundsteps=int(maxsteps/1000.);
+    if(temproundsteps>maxsteps) temproundsteps=maxsteps/1000UL;
     if(temproundsteps<10) temproundsteps=totalNumSpins;
     
 	double temperature=parameters.initialTemperature;
@@ -107,7 +107,7 @@ int main(int inputN,char *inputV[]) {
 	}
 	result << setprecision(outputPrecision);
 	
-	unsigned int temproundcounter=0;
+	unsigned long temproundcounter=0;
 	double accratio;
     long unsigned int counter=0; long accepted=0; long accepted_current=0;
     

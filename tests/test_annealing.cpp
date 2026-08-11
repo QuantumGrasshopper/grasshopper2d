@@ -2,7 +2,9 @@
 #include "doctest/doctest.h"
 
 #include <cmath>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 
 TEST_CASE("annealing helpers scale temperature, steps, and probability") {
     totalNumSpins = 4;
@@ -15,6 +17,22 @@ TEST_CASE("annealing helpers scale temperature, steps, and probability") {
     CHECK(temperatureDecrease(20.0) == doctest::Approx(10.0));
     CHECK(stepIncrease(10) == 20);
     CHECK(energyDecreaseProbDistr(-2.0, 2.0) == doctest::Approx(std::exp(-1.0)));
+}
+
+TEST_CASE("temperature-round step growth rejects unsigned long overflow") {
+    totalNumSpins = 4;
+    cellSize = 0.5;
+    gridSize = 4;
+    gridArea = 16;
+    tempScaling = 0.5;
+    deltaOption = 0;
+
+    CHECK_THROWS_AS(stepIncrease(std::numeric_limits<unsigned long>::max()),
+                    std::overflow_error);
+
+    tempScaling = 1.0;
+    CHECK(stepIncrease(std::numeric_limits<unsigned long>::max())
+      == std::numeric_limits<unsigned long>::max());
 }
 
 TEST_CASE("accept-reject handles the endpoint probabilities deterministically") {
