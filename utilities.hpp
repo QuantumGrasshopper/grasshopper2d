@@ -31,22 +31,6 @@ extern unsigned int gridArea;
 extern double tempScaling;
 extern int deltaOption;
 
-// extern std::set<std::string> validOptions = {"-d", 
-//                                              "-N", 
-//                                              "-gridsize", 
-//                                              "-hours", 
-//                                              "-steps", 
-//                                              "-tempsteps",
-//                                              "-inittemp", 
-//                                              "-fintemp",
-//                                              "-annealsteps",
-//                                              "-configoutput",
-//                                              "-initconf", 
-//                                              "-delta", 
-//                                              "-NNint",
-//                                              "-randomseed"    
-//                                              };
-
 // common functions
 
 bool isAround(double have, double comparewith);
@@ -58,6 +42,8 @@ double euclideanDistance(std::pair<double,double> point1, std::pair<double,doubl
 double euclideanDistance(std::pair<int,int> point1, std::pair<int,int> point2);
 
 // I/O routines
+
+void prepareOutputFiles(bool overwrite, bool preserveInitialConfiguration);
 
 template<typename T>
 T get_option(int inputN, char *inputV[], const char *was)

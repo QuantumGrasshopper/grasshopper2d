@@ -1,6 +1,24 @@
 #include "utilities.hpp"
 
+#include <array>
+#include <filesystem>
+#include <system_error>
+
 using namespace std;
+
+namespace {
+
+const array<const char*, 7> outputFiles{
+    "result.dat",
+    "energies.dat",
+    "temperatures.dat",
+    "config.dat",
+    "initconf.dat",
+    "finconf.dat",
+    "bestconf.dat"
+};
+
+} // namespace
 
 bool isAround(double have, double comparewith)
 	{	
@@ -62,7 +80,59 @@ double euclideanDistance(pair<int,int> point1, pair<int,int> point2)
 	}
 	
 // I/O routines
-	
+
+void prepareOutputFiles(bool overwrite, bool preserveInitialConfiguration) {
+    vector<string> existingOutputFiles;
+
+    // First inspect the complete output set without changing anything.
+    for (const char* filename : outputFiles) {
+        if (preserveInitialConfiguration && string(filename) == "initconf.dat") {
+            continue;
+        }
+
+        error_code error;
+        const filesystem::file_status status =
+            filesystem::symlink_status(filename, error);
+
+        if (error) {
+            if (error == errc::no_such_file_or_directory) {
+                continue;
+            }
+            throw runtime_error("Cannot inspect output artifact "
+                                + string(filename) + ": " + error.message());
+        }
+
+        if (!filesystem::exists(status)) {
+            continue;
+        }
+
+        if (filesystem::is_directory(status)) {
+            throw runtime_error("Output artifact is a directory: "
+                                + string(filename));
+        }
+
+        if (!overwrite) {
+            throw runtime_error("Output artifact already exists: "
+                                + string(filename)
+                                + ". Use -overwrite 1 to replace existing outputs.");
+        }
+
+        existingOutputFiles.push_back(filename);
+    }
+
+    // Only start removing files after the complete preflight succeeded.
+    for (const string& filename : existingOutputFiles) {
+        error_code error;
+        const bool removed = filesystem::remove(filename, error);
+
+        if (error || !removed) {
+            const string detail =
+                error ? error.message() : "file was not removed";
+            throw runtime_error("Cannot remove output artifact "
+                                + filename + ": " + detail);
+        }
+    }
+}
 
 BufferedFileWriter::BufferedFileWriter(const string& filename, size_t limit, chrono::milliseconds interval)
         : bufferLimit(limit), flushInterval(interval) {

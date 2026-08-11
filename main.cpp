@@ -81,7 +81,9 @@ int main(int inputN,char *inputV[]) {
     
     // one factor of 1/2 is already taken care of by avoiding double counting
     double probabilityNormFactor = 1/PI/d/pow(double(totalNumSpins),3./2.);
-    
+
+    prepareOutputFiles(parameters.overwriteExistingOutputs, initconf == "load");
+
 	gsl_rng * RNG = gsl_rng_alloc (gsl_rng_mt19937);
     long unsigned int seed=parameters.randomSeed.value_or(0UL);
     // Use system clock if no random seed supplied (seed is always output)
@@ -193,9 +195,10 @@ int main(int inputN,char *inputV[]) {
     BufferedFileWriter energies("energies.dat", bufferLimit, chrono::milliseconds(flushInterval));
 	energies.write(to_string(energy*probabilityNormFactor));
     BufferedFileWriter temperatures("temperatures.dat", bufferLimit, chrono::milliseconds(flushInterval));
-	ofstream configuration("config.dat");
+	ofstream configuration;
 	if(configOutputs > 0)
         {
+        configuration.open("config.dat");
         ostringstream buffer;
         for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
         buffer << energy*probabilityNormFactor << endl;
@@ -320,7 +323,6 @@ int main(int inputN,char *inputV[]) {
            << "final probability: " << energy*probabilityNormFactor << '\n'
            << "best probability: " << bestenergy*probabilityNormFactor << "\n\n";
     
-    if(configOutputs==0) {remove("config.dat");}
     saveConfig(spinArray.data(), "finconf.dat");
     saveConfig(bestSpinArray.data(), "bestconf.dat");
     

@@ -45,11 +45,13 @@ TEST_CASE("simulation parameter defaults are explicit") {
     CHECK(parameters.deltaOption == 0);
     CHECK(parameters.nearestNeighborInteraction == 0.0);
     CHECK_FALSE(parameters.randomSeed.has_value());
+    CHECK_FALSE(parameters.overwriteExistingOutputs);
 }
 
 TEST_CASE("simulation parser accepts every option in arbitrary order") {
     const SimulationParameters parameters = parse({
         "grasshopper",
+        "-overwrite", "1",
         "-randomseed", "12345",
         "-NNint", "-0.75",
         "-delta", "1",
@@ -83,6 +85,7 @@ TEST_CASE("simulation parser accepts every option in arbitrary order") {
     CHECK(parameters.nearestNeighborInteraction == doctest::Approx(-0.75));
     REQUIRE(parameters.randomSeed.has_value());
     CHECK(*parameters.randomSeed == 12345);
+    CHECK(parameters.overwriteExistingOutputs);
 
     CHECK_FALSE(parse({"grasshopper", "-d", "1", "-randomseed", "0"})
                     .randomSeed.has_value());
@@ -141,6 +144,8 @@ TEST_CASE("simulation parser enforces option-specific value rules") {
                   "-delta must be exactly");
     checkRejected({"grasshopper", "-d", "1", "-NNint", "infinity"},
                   "Invalid value for -NNint");
+    checkRejected({"grasshopper", "-d", "1", "-overwrite", "2"},
+                  "-overwrite must be exactly");
 }
 
 TEST_CASE("annealing step counts below one hundred remain parser-valid") {

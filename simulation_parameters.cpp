@@ -22,7 +22,8 @@ const std::set<std::string> recognizedOptions{
     "-initconf",
     "-delta",
     "-NNint",
-    "-randomseed"
+    "-randomseed",
+    "-overwrite"
 };
 
 bool isRecognizedOption(const std::string& text) {
@@ -188,6 +189,13 @@ SimulationParameters parseSimulationParameters(int argc, char* argv[]) {
             else {
                 parameters.randomSeed = parsedSeed;
             }
+        }
+        else if (option == "-overwrite") {
+            const int parsedOverwrite = parseNonnegativeInt(value, option);
+            if (parsedOverwrite != 0 && parsedOverwrite != 1) {
+                throw std::invalid_argument("-overwrite must be exactly 0 or 1");
+            }
+            parameters.overwriteExistingOutputs = parsedOverwrite == 1;
         }
     }
 

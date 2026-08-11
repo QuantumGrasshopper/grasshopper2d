@@ -284,6 +284,112 @@ def main():
             require_invalid_invocation(
                 executable, arguments, expected_cli_error, case_name)
 
+        output_policy_arguments = [
+            "-N", "2",
+            "-gridsize", "5",
+            "-d", "0.25",
+            "-hours", "0",
+            "-annealsteps", "100",
+            "-configoutput", "0",
+            "-randomseed", "12345",
+        ]
+
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-no-overwrite-") as directory:
+            working_directory = pathlib.Path(directory)
+            stale_config = working_directory / "config.dat"
+            sentinel = "configuration from an earlier run\n"
+            stale_config.write_text(sentinel, encoding="utf-8")
+            completed = subprocess.run(
+                [str(executable), *output_policy_arguments],
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode != 0,
+                    "default overwrite policy accepted an existing output")
+            require("Output artifact already exists: config.dat" in completed.stderr,
+                    "default overwrite policy did not identify the existing output")
+            require(stale_config.read_text(encoding="utf-8") == sentinel,
+                    "default overwrite policy changed the existing output")
+            require(not (working_directory / "result.dat").exists(),
+                    "default overwrite rejection created result.dat")
+
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-overwrite-") as directory:
+            working_directory = pathlib.Path(directory)
+            stale_result = working_directory / "result.dat"
+            stale_config = working_directory / "config.dat"
+            stale_result.write_text("result from an earlier run\n", encoding="utf-8")
+            stale_config.write_text("stale configuration output\n", encoding="utf-8")
+            completed = subprocess.run(
+                [str(executable), *output_policy_arguments, "-overwrite", "1"],
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode == 0,
+                    f"overwrite run exited with status {completed.returncode}")
+            require("2D Grasshopper with Simulated Annealing" in
+                    stale_result.read_text(encoding="utf-8"),
+                    "overwrite run did not replace result.dat")
+            require(not stale_config.exists(),
+                    "overwrite run left stale config.dat when configoutput was zero")
+
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-load-overwrite-") as directory:
+            working_directory = pathlib.Path(directory)
+            initial_configuration = working_directory / "initconf.dat"
+            initial_contents = "6\n18\n"
+            initial_configuration.write_text(initial_contents, encoding="utf-8")
+            (working_directory / "config.dat").write_text(
+                "stale configuration output\n", encoding="utf-8")
+            completed = subprocess.run(
+                [str(executable), *output_policy_arguments,
+                 "-initconf", "load", "-overwrite", "1"],
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode == 0,
+                    f"load overwrite run exited with status {completed.returncode}")
+            require(initial_configuration.read_text(encoding="utf-8") == initial_contents,
+                    "load overwrite run changed initconf.dat")
+            require(not (working_directory / "config.dat").exists(),
+                    "load overwrite run left stale config.dat")
+
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-cleanup-failure-") as directory:
+            working_directory = pathlib.Path(directory)
+
+            stale_result = working_directory / "result.dat"
+            result_sentinel = "result from an earlier run\n"
+            stale_result.write_text(result_sentinel, encoding="utf-8")
+
+            blocked_artifact = working_directory / "config.dat"
+            blocked_artifact.mkdir()
+            completed = subprocess.run(
+                [str(executable), *output_policy_arguments, "-overwrite", "1"],
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode != 0, "output cleanup failure was ignored")
+            require("Output artifact is a directory: config.dat" in completed.stderr,
+                    "directory output artifact was not identified")
+            require(stale_result.read_text(encoding="utf-8") == result_sentinel,
+                    "cleanup failure changed an earlier output before preflight completed")
+            require(blocked_artifact.is_dir(),
+                    "directory output artifact was removed")
+
     except (IntegrationTestFailure, OSError, subprocess.SubprocessError) as error:
         print(f"integration tests: FAIL: {error}", file=sys.stderr)
         print("command: " + " ".join(command), file=sys.stderr)
@@ -294,7 +400,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration tests: PASS (17 tests)")
+    print("integration tests: PASS (21 tests)")
     return 0
 
 

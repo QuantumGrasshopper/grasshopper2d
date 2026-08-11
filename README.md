@@ -28,6 +28,7 @@ To compile the code, type `make` in the shell while in the folder containing the
 | `-delta`        | choice of delta-function discretization: exactly `0` (default) or `1` |
 | `-NNint`        | nearest neighbor interaction coefficient (0 by default) |
 | `-randomseed`   | unsigned initial value for the random number generator (if omitted or set to `0`, a seed is generated from the system clock) |
+| `-overwrite`    | output overwrite policy: exactly `0` (default, reject if an output artifact exists) or `1` (remove old output artifacts before starting) |
 
 
 Required options: `d`
@@ -37,17 +38,24 @@ Every option accepts exactly one value and may be supplied at most once. Unknown
 
 You can also look into the source code to remind yourself of what the options do.
 
-The code will generate the following output files:
+The code uses the following standard output files:
 
 file name          | comment
 ---------------    | ---------------
 `result.dat`       | general info about the simulation and parameters
-`initconf.dat`     | initial spin configuration
+`initconf.dat`     | initial spin configuration; with `-initconf load`, this is an input and is never removed or overwritten
 `finconf.dat`      | final spin configuration
 `bestconf.dat`     | best spin configuration over the whole run
 `energies.dat`     | every annealing round the energy (grasshopper probability) value is written to this file
 `temperatures.dat` | every annealing round prints the counter, the current temperature, and the current acceptance ratio
 `config.dat`       | stores the spin configuration and energy every certain number of steps, can be used to generate animations of the system evolution (no longer output by default)
+
+By default, a run is rejected before creating files if any standard output file
+listed above already exists. With `-overwrite 1`, the complete standard output
+set is removed before the run so that stale files, including `config.dat`, do
+not survive when the corresponding output is disabled. The sole exception is
+`initconf.dat` with `-initconf load`: it is preserved as the run's input. A
+cleanup error aborts the run before simulation output begins.
 
 Example of command to run the code:
 

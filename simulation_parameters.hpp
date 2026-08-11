@@ -21,6 +21,7 @@ struct SimulationParameters {
     int deltaOption = 0;
     double nearestNeighborInteraction = 0.0;
     std::optional<unsigned long> randomSeed;
+    bool overwriteExistingOutputs = false;
 };
 
 SimulationParameters parseSimulationParameters(int argc, char* argv[]);
