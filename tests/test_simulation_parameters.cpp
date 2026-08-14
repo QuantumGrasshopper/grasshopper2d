@@ -1,5 +1,5 @@
 #include "doctest/doctest.h"
-#include "simulation_parameters.hpp"
+#include "parameters.hpp"
 
 #include <stdexcept>
 #include <string>

@@ -1,7 +1,7 @@
 #include "utilities.hpp"
 #include "setup.hpp"
 #include "annealing.hpp"
-#include "simulation_parameters.hpp"
+#include "parameters.hpp"
 
 unsigned int totalNumSpins;
 double cellSize;
