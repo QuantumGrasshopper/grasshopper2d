@@ -1,5 +1,6 @@
 #include "annealing.hpp"
 #include "doctest/doctest.h"
+#include "utilities.hpp"
 
 #include <cmath>
 #include <limits>

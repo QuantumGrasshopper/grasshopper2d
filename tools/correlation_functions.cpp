@@ -3,9 +3,19 @@
 // creates spatial representation of correlations and computes averages
 
 // compile with
-// g++ -O3 -Wall -std=c++17 correlation_functions.cpp ../utilities.o -o correlations -lgsl -lgslcblas -lm
+// g++ -O3 -Wall -std=c++17 correlation_functions.cpp ../interactions.o -o correlations -lgsl -lgslcblas -lm
 
+#include "../interactions.hpp"
 #include "../utilities.hpp"
+
+#include <cmath>
+#include <cstdio>
+#include <fstream>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
 
 unsigned int totalNumSpins;
 double cellSize;

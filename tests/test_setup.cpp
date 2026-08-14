@@ -1,8 +1,10 @@
 #include "doctest/doctest.h"
 #include "setup.hpp"
+#include "utilities.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iterator>

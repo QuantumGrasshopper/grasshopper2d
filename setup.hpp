@@ -1,4 +1,8 @@
-#include "utilities.hpp"
+#pragma once
+
+#include <string>
+
+#include <gsl/gsl_rng.h>
 
 void initLoad(unsigned char grid[], int spinArray[]);
 void initRandom(unsigned char grid[], int spinArray[], gsl_rng* RNG);
