@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <vector>
 #include <stdexcept>
-#include <bits/stdc++.h>
+#include <chrono>
 
 #define PI 3.14159265358979323846264338328 
 #define EPS 1e-8
