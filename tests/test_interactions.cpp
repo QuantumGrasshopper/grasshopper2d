@@ -69,3 +69,72 @@ TEST_CASE("delta option one evaluates both analytic branches") {
     CHECK(contributionEnergy(0.0, 2.0) == 0.0);
     CHECK(contributionEnergy(1.5, 0.0) == contributionEnergy(0.0, 1.5));
 }
+
+TEST_CASE("interaction grid agrees with values from direct evaluation"){
+    totalNumSpins = 4;
+    cellSize = 0.25;
+    gridSize = 20;
+    gridArea = 400;
+    tempScaling = 1.0;
+    deltaOption = 0;
+
+    double distance = 1; // 4 cells
+    std::vector<unsigned char> grid(gridArea);
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        grid[i]=false;
+        }
+    grid[210] = true; grid[214] = true; grid[290] = true; grid[0] = true;
+
+    auto dNeighbourTable = buildInteractionTable(distance);
+    auto interactionGrid = buildGrasshopperInteractionGrid(grid.data(), dNeighbourTable);
+
+    double directEnergyContribution = 0;
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        if(grid[i]) directEnergyContribution+=contributionEnergy(distance, euclideanDistance(findPosition(0),findPosition(i)));
+        }
+    CHECK(interactionGrid[0] == doctest::Approx(directEnergyContribution));
+
+    directEnergyContribution = 0;
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        if(grid[i]) directEnergyContribution+=contributionEnergy(distance, euclideanDistance(findPosition(210),findPosition(i)));
+        }
+    CHECK(interactionGrid[210] == doctest::Approx(directEnergyContribution));
+
+    directEnergyContribution = 0;
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        if(grid[i]) directEnergyContribution+=contributionEnergy(distance, euclideanDistance(findPosition(130),findPosition(i)));
+        }
+    CHECK(interactionGrid[130] == doctest::Approx(directEnergyContribution));
+
+    //total energy
+    int spinArray[] = {0,210,214,290};
+    double energy = totalGrasshopperInteraction(grid.data(), interactionGrid);
+    double directEnergy = 0;
+	for(unsigned int i=0;i<totalNumSpins;i++)
+		{
+		for(unsigned int j=i;j<totalNumSpins;j++)
+			{
+			directEnergy+=contributionEnergy(euclideanDistance(findPosition(spinArray[i]),findPosition(spinArray[j])),distance);
+			}
+		}
+    CHECK(energy == doctest::Approx(directEnergy));
+
+	directEnergy = 0;
+	for(unsigned int i=0;i<totalNumSpins;i++)
+		{
+		for(unsigned int j=0;j<dNeighbourTable[spinArray[i]].size();j++)
+			{
+			if(grid[dNeighbourTable[spinArray[i]][j].first]==true)
+				{directEnergy+=dNeighbourTable[spinArray[i]][j].second;}
+			}
+		}
+	CHECK(energy == doctest::Approx(directEnergy/2.));
+}
+
+
+
+
