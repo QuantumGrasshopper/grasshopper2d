@@ -20,8 +20,8 @@ double contributionEnergy(double have, double comparewith);
 
 void validateInteractionTableReach(double distance);
 using GrasshopperInteractionTable = std::vector<std::vector<std::pair<int,double>>>;
-GrasshopperInteractionTable buildInteractionTable(double distance);   //what currently constructs dNeighbourTemplate and dNeighbourTable
-std::vector<double> buildGrasshopperInteractionGrid(const unsigned char grid[], const GrasshopperInteractionTable& table);  //Q_i(r), what is currently energyGrid
+GrasshopperInteractionTable buildInteractionTable(double distance);
+std::vector<double> buildGrasshopperInteractionGrid(const unsigned char grid[], const GrasshopperInteractionTable& table);
 double totalGrasshopperInteraction(const unsigned char grid[], const std::vector<double>& interactionGrid);
 
 //nearest-neighbor contributions

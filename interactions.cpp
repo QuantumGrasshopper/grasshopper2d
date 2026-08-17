@@ -152,7 +152,7 @@ double totalGrasshopperInteraction(const unsigned char grid[], const std::vector
 //nearest-neighbor contributions
 unsigned int nearestNeighborCount(const unsigned int cell, const unsigned char grid[]){
 	unsigned int NNenergy = 0;
-	const int signedGridSize = static_cast<int>(gridSize);  //to get rid of Wsign-compare compiler warnings
+	const int signedGridSize = static_cast<int>(gridSize);
 
 	//down
 	if(cell>=gridSize) NNenergy += grid[cell-gridSize];

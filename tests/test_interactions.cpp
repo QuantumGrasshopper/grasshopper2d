@@ -116,7 +116,7 @@ TEST_CASE("interaction grid agrees with values from direct evaluation"){
     double directEnergy = 0;
 	for(unsigned int i=0;i<totalNumSpins;i++)
 		{
-		for(unsigned int j=i;j<totalNumSpins;j++)
+		for(unsigned int j=i+1;j<totalNumSpins;j++)
 			{
 			directEnergy+=contributionEnergy(euclideanDistance(findPosition(spinArray[i]),findPosition(spinArray[j])),distance);
 			}
@@ -150,11 +150,11 @@ TEST_CASE("nearest neighbor contribution"){
         }
     grid[5] = false; grid[15] = false;
 
-    CHECK(2 == doctest::Approx(nearestNeighborCount(0, grid.data())));   //corner, all occupied
-    CHECK(2 == doctest::Approx(nearestNeighborCount(15, grid.data())));  //corner, all occupied, self empty
-    CHECK(3 == doctest::Approx(nearestNeighborCount(13, grid.data())));  //side, all occupied
-    CHECK(4 == doctest::Approx(nearestNeighborCount(5, grid.data())));   //bulk, all occupied
-    CHECK(3 == doctest::Approx(nearestNeighborCount(6, grid.data())));   //bulk, one empty
+    CHECK(nearestNeighborCount(0, grid.data()) == 2U);   //corner, all occupied
+    CHECK(nearestNeighborCount(15, grid.data()) == 2U);  //corner, all occupied, self empty
+    CHECK(nearestNeighborCount(13, grid.data()) == 3U);  //side, all occupied
+    CHECK(nearestNeighborCount(5, grid.data()) == 4U);   //bulk, all occupied
+    CHECK(nearestNeighborCount(6, grid.data()) == 3U);   //bulk, one empty
 
 }
 
