@@ -70,7 +70,8 @@ int main(int inputN,char *inputV[]) {
         throw invalid_argument("N must be smaller than the grid area.");
     }
     gridArea = static_cast<unsigned int>(selectedGridArea);
-    const int signedGridSize = static_cast<int>(gridSize);  //to get rid of Wsign-compare compiler warnings
+    validateInteractionTableReach(d);
+    const int signedGridSize = static_cast<int>(gridSize);
     
     double maxtime=parameters.hours;
     maxtime=60*60*maxtime*1000;
@@ -135,40 +136,11 @@ int main(int inputN,char *inputV[]) {
 	       << "Initial number of steps before temperature scaling: " << temproundsteps << "\n\n";
 	checkOutputStream(result, "result.dat", "write");
 
-    auto begin = chrono::high_resolution_clock::now();
-    
     // CONSTRUCT NEIGHBOR LIST ---------------------------------------------------------------------------  
 
-    vector< pair<int,double> > dNeighbourTemplate;
-	std::vector<std::vector<std::pair<int,double>>> dNeighbourTable(gridArea);	//for each grid point: list of points that are its d-neighbours with corresponding energies
-    
-    int center = (gridSize/2) * gridSize + gridSize/2;
-    double thisEnergyContribution;
-    pair<double,double> currentPosition=findPosition(center);
-    for(unsigned int j=0;j<gridArea;j++)
-        {
-        thisEnergyContribution=contributionEnergy(d,euclideanDistance(currentPosition,findPosition(j)));
-        pair<int,double> thisPair(j,thisEnergyContribution);
-        if(thisEnergyContribution > EPS) dNeighbourTemplate.push_back(thisPair);
-        }
-    
-	for(unsigned int j=0;j<dNeighbourTemplate.size();j++)
-		{
-        int coord = dNeighbourTemplate[j].first;
-        int relx = xcoord(coord) - signedGridSize/2;
-        int rely = ycoord(coord) - signedGridSize/2;
-        double relativeEnergy = dNeighbourTemplate[j].second;
-        for(unsigned int i=0;i<gridArea;i++)
-            {
-            int gridLocationx = xcoord(i) + relx;
-            int gridLocationy = ycoord(i) + rely;
-            if(gridLocationx >= 0 && gridLocationy >= 0 && gridLocationx < signedGridSize && gridLocationy < signedGridSize)
-                {
-                pair<int,double> thisPair(gridLocationx + gridLocationy*gridSize, relativeEnergy);
-                dNeighbourTable[i].push_back(thisPair);
-                }
-            }
-		}
+    auto begin = chrono::high_resolution_clock::now();
+
+    auto interactionTable = buildInteractionTable(d);
 		
     auto now = chrono::high_resolution_clock::now();
     auto timeDiff = chrono::duration_cast<chrono::milliseconds>(now-begin).count();
@@ -182,7 +154,7 @@ int main(int inputN,char *inputV[]) {
 	std::vector<int> noSpinArray(gridArea-totalNumSpins); //complementary to above: grid point where no spin is
     
     initialize(grid.data(), spinArray.data(), RNG, initconf);
-    auto interactionTable = buildInteractionTable(d);
+
     auto energyGrid = buildGrasshopperInteractionGrid(grid.data(), interactionTable);
     double grasshopperEnergy = totalGrasshopperInteraction(grid.data(), energyGrid);
     
@@ -193,18 +165,7 @@ int main(int inputN,char *inputV[]) {
 		{
 		if(grid[i]==false) {noSpinArray[noSpinCounter]=i; noSpinCounter++;}
 		// NN contributions
-		else {
-            //down
-            if(i>=gridSize) NNenergy += grid[i-gridSize];
-            //up
-            if(i<gridSize*(gridSize-1)) NNenergy += grid[i+gridSize];
-            
-            int gridLocationx = xcoord(i);
-            //left
-            if(gridLocationx != 0) NNenergy += grid[i-1];
-            //right
-            if(gridLocationx != signedGridSize-1) NNenergy += grid[i+1];
-            }
+		else {NNenergy+=nearestNeighborCount(i, grid.data());}
 		}
     NNenergy = NNenergy*NNint/2.;
     energy = grasshopperEnergy+NNenergy;
@@ -287,13 +248,13 @@ int main(int inputN,char *inputV[]) {
 			spinArray[destroy]=newSpinCoord; noSpinArray[create]=oldSpinCoord;
 			energy+=energyDifference;
             //update energy grid
-            for(unsigned int j=0;j<dNeighbourTable[oldSpinCoord].size();j++)
+            for(unsigned int j=0;j<interactionTable[oldSpinCoord].size();j++)
                 {
-                energyGrid[dNeighbourTable[oldSpinCoord][j].first] -= dNeighbourTable[oldSpinCoord][j].second;
+                energyGrid[interactionTable[oldSpinCoord][j].first] -= interactionTable[oldSpinCoord][j].second;
                 }
-            for(unsigned int j=0;j<dNeighbourTable[newSpinCoord].size();j++)
+            for(unsigned int j=0;j<interactionTable[newSpinCoord].size();j++)
                 {
-				energyGrid[dNeighbourTable[newSpinCoord][j].first] += dNeighbourTable[newSpinCoord][j].second;
+				energyGrid[interactionTable[newSpinCoord][j].first] += interactionTable[newSpinCoord][j].second;
                 }
 			accepted_current++;
 			if(energy>bestenergy)

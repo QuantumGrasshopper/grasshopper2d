@@ -94,21 +94,21 @@ TEST_CASE("interaction grid agrees with values from direct evaluation"){
         {
         if(grid[i]) directEnergyContribution+=contributionEnergy(distance, euclideanDistance(findPosition(0),findPosition(i)));
         }
-    CHECK(interactionGrid[0] == doctest::Approx(directEnergyContribution));
+    CHECK(interactionGrid[0] == doctest::Approx(directEnergyContribution));  //occupied site without close d-neighbors
 
     directEnergyContribution = 0;
     for(unsigned int i=0;i<gridArea;i++)
         {
         if(grid[i]) directEnergyContribution+=contributionEnergy(distance, euclideanDistance(findPosition(210),findPosition(i)));
         }
-    CHECK(interactionGrid[210] == doctest::Approx(directEnergyContribution));
+    CHECK(interactionGrid[210] == doctest::Approx(directEnergyContribution)); //occupied site with close d-neighbors
 
     directEnergyContribution = 0;
     for(unsigned int i=0;i<gridArea;i++)
         {
         if(grid[i]) directEnergyContribution+=contributionEnergy(distance, euclideanDistance(findPosition(130),findPosition(i)));
         }
-    CHECK(interactionGrid[130] == doctest::Approx(directEnergyContribution));
+    CHECK(interactionGrid[130] == doctest::Approx(directEnergyContribution)); //unoccupied site with close d-neighbors
 
     //total energy
     int spinArray[] = {0,210,214,290};
@@ -135,6 +135,27 @@ TEST_CASE("interaction grid agrees with values from direct evaluation"){
 	CHECK(energy == doctest::Approx(directEnergy/2.));
 }
 
+TEST_CASE("nearest neighbor contribution"){
+    totalNumSpins = 14;
+    cellSize = 0.25;
+    gridSize = 4;
+    gridArea = 16;
+    tempScaling = 1.0;
+    deltaOption = 0;
 
+    std::vector<unsigned char> grid(gridArea);
+    for(unsigned int i=0;i<gridArea;i++)
+        {
+        grid[i]=true;
+        }
+    grid[5] = false; grid[15] = false;
+
+    CHECK(2 == doctest::Approx(nearestNeighborCount(0, grid.data())));   //corner, all occupied
+    CHECK(2 == doctest::Approx(nearestNeighborCount(15, grid.data())));  //corner, all occupied, self empty
+    CHECK(3 == doctest::Approx(nearestNeighborCount(13, grid.data())));  //side, all occupied
+    CHECK(4 == doctest::Approx(nearestNeighborCount(5, grid.data())));   //bulk, all occupied
+    CHECK(3 == doctest::Approx(nearestNeighborCount(6, grid.data())));   //bulk, one empty
+
+}
 
 
