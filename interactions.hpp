@@ -26,3 +26,10 @@ double totalGrasshopperInteraction(const unsigned char grid[], const std::vector
 
 //nearest-neighbor contributions
 unsigned int nearestNeighborCount(const unsigned int cell, const unsigned char grid[]);
+bool areNearestNeighbors(const unsigned int cell1, const unsigned int cell2);
+int nearestNeighborBondDifference(const unsigned int oldCell, const unsigned int newCell, const unsigned char grid[]);
+
+//normalizations
+double normalizeGrasshopperEnergy(double energy, double distance);
+double normalizeGrasshopperInteraction(double interaction, double distance);
+double nearestNeighborProbability(long long nearestNeighborBonds);

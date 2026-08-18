@@ -133,6 +133,59 @@ TEST_CASE("interaction grid agrees with values from direct evaluation"){
 			}
 		}
 	CHECK(energy == doctest::Approx(directEnergy/2.));
+
+    double averageLocalProbability = 0.0;
+    for(unsigned int i=0; i<gridArea; i++)
+        {
+        if(grid[i])
+            averageLocalProbability += normalizeGrasshopperInteraction(interactionGrid[i], distance);
+        }
+
+    averageLocalProbability /= totalNumSpins;
+
+    CHECK(normalizeGrasshopperEnergy(energy, distance) == doctest::Approx(averageLocalProbability).epsilon(1e-12));
+}
+
+TEST_CASE("grasshopper energy difference agrees with full recomputation"){
+    totalNumSpins = 4;
+    cellSize = 0.25;
+    gridSize = 20;
+    gridArea = 400;
+    tempScaling = 1.0;
+    deltaOption = 0;
+
+    const double distance = 1.0;
+
+    std::vector<unsigned char> grid(gridArea, false);
+    grid[0] = true;
+    grid[210] = true;
+    grid[214] = true;
+    grid[290] = true;
+
+    const auto interactionTable = buildInteractionTable(distance);
+    const auto interactionGrid = buildGrasshopperInteractionGrid(grid.data(), interactionTable);
+
+    const double energyBefore = totalGrasshopperInteraction(grid.data(), interactionGrid);
+
+    const unsigned int oldCell = 214;
+    const unsigned int newCell = 130;
+
+    double energyDifference = interactionGrid[newCell] - interactionGrid[oldCell];
+
+    const double moveDistance = euclideanDistance(findPosition(newCell), findPosition(oldCell));
+
+    if(isAround(distance, moveDistance))
+        energyDifference -= contributionEnergy(distance, moveDistance);
+
+    auto movedGrid = grid;
+    movedGrid[oldCell] = false;
+    movedGrid[newCell] = true;
+
+    const auto movedInteractionGrid = buildGrasshopperInteractionGrid(movedGrid.data(), interactionTable);
+
+    const double energyAfter = totalGrasshopperInteraction(movedGrid.data(), movedInteractionGrid);
+
+    CHECK(energyAfter == doctest::Approx(energyBefore + energyDifference).epsilon(1e-12));
 }
 
 TEST_CASE("nearest neighbor contribution"){
@@ -143,11 +196,7 @@ TEST_CASE("nearest neighbor contribution"){
     tempScaling = 1.0;
     deltaOption = 0;
 
-    std::vector<unsigned char> grid(gridArea);
-    for(unsigned int i=0;i<gridArea;i++)
-        {
-        grid[i]=true;
-        }
+    std::vector<unsigned char> grid(gridArea, true);
     grid[5] = false; grid[15] = false;
 
     CHECK(nearestNeighborCount(0, grid.data()) == 2U);   //corner, all occupied
@@ -156,6 +205,73 @@ TEST_CASE("nearest neighbor contribution"){
     CHECK(nearestNeighborCount(5, grid.data()) == 4U);   //bulk, all occupied
     CHECK(nearestNeighborCount(6, grid.data()) == 3U);   //bulk, one empty
 
+    CHECK(areNearestNeighbors(0,1) == true);
+    CHECK(areNearestNeighbors(1,0) == true);
+    CHECK(areNearestNeighbors(0,2) == false);
+    CHECK(areNearestNeighbors(3,4) == false);
+    CHECK(areNearestNeighbors(3,7) == true);
+    CHECK(areNearestNeighbors(7,3) == true);
+    CHECK(areNearestNeighbors(3,3) == false);
+
+    CHECK(nearestNeighborBondDifference(13, 5, grid.data()) == 1);
+    CHECK(nearestNeighborBondDifference(12, 5, grid.data()) == 2);
+    CHECK(nearestNeighborBondDifference(10, 5, grid.data()) == 0);
+    CHECK(nearestNeighborBondDifference(0, 15, grid.data()) == 0);
+    CHECK(nearestNeighborBondDifference(10, 15, grid.data()) == -2);
+    CHECK(nearestNeighborBondDifference(6, 5, grid.data()) == 0);
+    CHECK(nearestNeighborBondDifference(11, 15, grid.data()) == -1);
+
+}
+
+TEST_CASE("nearest neighbor bond difference agrees with full recount"){
+    totalNumSpins = 14;
+    cellSize = 0.25;
+    gridSize = 4;
+    gridArea = 16;
+    tempScaling = 1.0;
+    deltaOption = 0;
+
+    std::vector<unsigned char> grid(gridArea, true);
+    grid[5] = false; grid[15] = false;
+
+    auto countBonds = [](const std::vector<unsigned char>& configuration)
+        {
+        long long bonds = 0;
+
+        for(unsigned int cell=0; cell<gridArea; cell++)
+            {
+            if(!configuration[cell]) continue;
+
+            // right
+            if(cell%gridSize != gridSize-1 && configuration[cell+1])
+                bonds++;
+            // up
+            if(cell+gridSize < gridArea && configuration[cell+gridSize])
+                bonds++;
+            }
+
+        return bonds;
+        };
+
+    const long long bondsBefore = countBonds(grid);
+
+    for(unsigned int oldCell=0; oldCell<gridArea; oldCell++)
+        {
+        if(!grid[oldCell]) continue;
+
+        for(unsigned int newCell=0; newCell<gridArea; newCell++)
+            {
+            if(grid[newCell]) continue;
+
+            const int predictedDifference = nearestNeighborBondDifference(oldCell, newCell, grid.data());
+
+            auto movedGrid = grid;
+            movedGrid[oldCell] = false;
+            movedGrid[newCell] = true;
+
+            CHECK(countBonds(movedGrid) - bondsBefore == predictedDifference);
+            }
+        }
 }
 
 

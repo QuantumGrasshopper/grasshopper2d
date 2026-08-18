@@ -168,3 +168,31 @@ unsigned int nearestNeighborCount(const unsigned int cell, const unsigned char g
 	return NNenergy;
 }
 
+bool areNearestNeighbors(const unsigned int cell1, const unsigned int cell2){
+
+	const unsigned int dx = xcoord(cell1) > xcoord(cell2) ? xcoord(cell1)-xcoord(cell2) : xcoord(cell2)-xcoord(cell1);
+    const unsigned int dy = ycoord(cell1) > ycoord(cell2) ? ycoord(cell1)-ycoord(cell2) : ycoord(cell2)-ycoord(cell1);
+
+	return dx + dy == 1;
+}
+
+int nearestNeighborBondDifference(const unsigned int oldCell, const unsigned int newCell, const unsigned char grid[]){
+	// if old and new cell are nearest neighbors, need to account for old cell emptying after the move
+	return static_cast<int>(nearestNeighborCount(newCell, grid)) - static_cast<int>(nearestNeighborCount(oldCell, grid)) - areNearestNeighbors(oldCell, newCell);
+}
+
+//normalizations
+double normalizeGrasshopperEnergy(double energy, double distance){
+	// one factor of 1/2 is already taken care of by avoiding double counting
+    const double sqrtN = sqrt(static_cast<double>(totalNumSpins));
+    return energy / (PI * distance * totalNumSpins * sqrtN);
+}
+
+double normalizeGrasshopperInteraction(double interaction, double distance){
+    const double sqrtN = sqrt(static_cast<double>(totalNumSpins));
+    return interaction / (2.0 * PI * distance * sqrtN);
+}
+
+double nearestNeighborProbability(long long nearestNeighborBonds){
+    return static_cast<double>(nearestNeighborBonds) / (2.0 * totalNumSpins);
+}
