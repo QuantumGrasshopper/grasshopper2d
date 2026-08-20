@@ -1,6 +1,7 @@
 #include "parameters.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <limits>
 #include <set>
 #include <stdexcept>

@@ -6,9 +6,9 @@ Currently implemented for a square grid and with simulated annealing
 
 - make
 - GSL library
-- g++ compiler with c++17 (or another C++ compiler, which requires adjusting the Makefile)
+- C++17 compiler (GCC and Clang tested)
 
-To compile the code, type `make` in the shell while in the folder containing the code.
+To compile the code, type `make` in the shell while in the folder containing the code. This uses the default GCC compiler. To use a different compiler, for example Clang, type `make CXX=clang++`, etc.
 
 ## 2. Code options (the order doesn't matter)
 

@@ -33,7 +33,7 @@ using namespace std;
 int main(int inputN,char *inputV[]) {
     try {
     const int outputPrecision=numeric_limits<double>::max_digits10;
-    auto formatDouble = [outputPrecision](double value) {
+    auto formatDouble = [](double value) {
         ostringstream buffer;
         buffer << setprecision(outputPrecision) << value;
         return buffer.str();

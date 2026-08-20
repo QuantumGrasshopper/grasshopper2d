@@ -3,6 +3,7 @@
 #include "../utilities.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <fstream>
 #include <iomanip>
 #include <iostream>

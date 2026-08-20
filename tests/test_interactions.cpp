@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <utility>
+#include <vector>
 
 TEST_CASE("coordinate conversion and physical positions") {
     totalNumSpins = 4;
@@ -276,4 +277,3 @@ TEST_CASE("nearest neighbor bond difference agrees with full recount"){
             }
         }
 }
-
