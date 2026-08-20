@@ -46,24 +46,13 @@ file name          | comment
 `initconf.dat`     | initial spin configuration; with `-initconf load`, this is an input and is never removed or overwritten
 `finconf.dat`      | final spin configuration
 `bestconf.dat`     | best spin configuration over the whole run
-`energies.dat`     | every annealing round the energy (grasshopper probability) value is written to this file
+`energies.dat`     | every annealing round the energy (normalized MC objective, which equals the grasshopper probability if NNint=0) value is written to this file
 `temperatures.dat` | every annealing round prints the counter, the current temperature, and the current acceptance ratio
 `config.dat`       | stores selected spin configurations and energies across the annealing trajectory for animation or analysis (not output by default)
 
-For `-configoutput`, `0` disables `config.dat` and `1` stores only the actual
-final configuration. Values of `2` or more reserve rows for the initial and
-actual final configurations, with up to the remaining maximum distributed
-approximately uniformly over cooling stages (and therefore log temperature).
-Stages are not duplicated when more rows are requested than the annealing
-schedule provides. If a run terminates early, its actual final configuration
-is still the last row.
+For `-configoutput`, `0` disables `config.dat` and `1` stores only the actual final configuration. Values of `2` or more reserve rows for the initial and actual final configurations, with up to the remaining maximum distributed approximately uniformly over cooling stages (and therefore log temperature). Stages are not duplicated when more rows are requested than the annealing schedule provides. If a run terminates early, its actual final configuration is still the last row.
 
-By default, a run is rejected before creating files if any standard output file
-listed above already exists. With `-overwrite 1`, the complete standard output
-set is removed before the run so that stale files, including `config.dat`, do
-not survive when the corresponding output is disabled. The sole exception is
-`initconf.dat` with `-initconf load`: it is preserved as the run's input. A
-cleanup error aborts the run before simulation output begins.
+By default, a run is rejected before creating files if any standard output file listed above already exists. With `-overwrite 1`, the complete standard output set is removed before the run so that stale files, including `config.dat`, do not survive when the corresponding output is disabled. The only exception is `initconf.dat` with `-initconf load`, which is preserved as the run's input. A cleanup error aborts the run before simulation output begins.
 
 Example of command to run the code:
 
@@ -78,3 +67,32 @@ Python scripts for plotting spin configurations and other tools can be found in 
 - `anneal_frame.py` plots individual frames from `config.dat` rather than creating the full animation.
 - `extract_boundary.py` extracts the boundary of a cogwheel shape (read from `finconf.dat`) and returns it in the polar coordinate representation (rho vs. phi). The files `finconf.dat` and `result.dat` must be present.
 - `finite_temp_analysis.py` contains several routines for analyzing output from simulations that ran at constant temperature. It automatically generates several figures. The root directory must be manually adjusted.
+
+## 4. Spatial correlation analysis
+
+Build the C++ correlation tool explicitly with:
+
+> `make correlation-tool`
+
+This target is separate from the normal simulation build and from `make test`.
+Analyze a saved configuration with:
+
+> `./tools/correlations -config finconf.dat [-r 0.3]`
+
+The `-config FILE` option is required. The tool reads simulation metadata from `result.dat` and writes `correlations.dat`, potentially overwriting a previously existing file with that name. The optional `-r DISTANCE` selects the correlation distance; if omitted, the hopping distance from `result.dat` is used. The distance must be positive and must satisfy the same interaction-table reach condition as a simulation hopping distance. Distances that are not larger than two grid cells are accepted with a warning because they do not resolve the full `+/- 2`-cell delta-function smearing away from zero distance.
+
+The output contains one flattened row-major row for every grid site, including unoccupied sites, with this schema:
+
+```text
+# cell x y occupation local_grasshopper_probability nn_fraction
+```
+
+`local_grasshopper_probability` is the raw local grasshopper interaction divided by `2*pi*r*sqrt(N)`.
+`nn_fraction` is the nearest-neighbor count divided by four.
+The tool also prints the selected distance, global grasshopper probability, global nearest-neighbor probability, and output filename to standard output.
+
+The plot-only Python script reads this spatial output without repeating any correlation calculations:
+
+> `python3 tools/correlation_plot.py correlations.dat`
+
+It requires NumPy and Matplotlib. By default it plots occupation, normalized local grasshopper probability over the full grid, and the same probability masked to occupied cells. Use repeated `--field` options to plot only selected fields, and `--save FILE` to write the figure instead of opening an interactive window. Normal simulation builds and C++ unit tests do not require these Python plotting dependencies.

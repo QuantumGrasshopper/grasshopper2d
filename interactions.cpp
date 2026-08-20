@@ -79,7 +79,7 @@ void validateInteractionTableReach(double distance){
     const unsigned int templateReachCells = (gridSize - 1) / 2;
     const double requiredReachCells = std::ceil(distance / cellSize) + 1.0;
     if (static_cast<double>(templateReachCells) < requiredReachCells) {
-        throw invalid_argument("Grid size is too small for the hopping-distance support.");
+        throw invalid_argument("Grid size is too small for the requested interaction-distance support.");
 	}
 }
 
@@ -191,6 +191,10 @@ double normalizeGrasshopperEnergy(double energy, double distance){
 double normalizeGrasshopperInteraction(double interaction, double distance){
     const double sqrtN = sqrt(static_cast<double>(totalNumSpins));
     return interaction / (2.0 * PI * distance * sqrtN);
+}
+
+double normalizeNearestNeighborCount(unsigned int count){
+    return static_cast<double>(count) / 4.0;
 }
 
 double nearestNeighborProbability(long long nearestNeighborBonds){

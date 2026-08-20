@@ -204,6 +204,9 @@ TEST_CASE("nearest neighbor contribution"){
     CHECK(nearestNeighborCount(13, grid.data()) == 3U);  //side, all occupied
     CHECK(nearestNeighborCount(5, grid.data()) == 4U);   //bulk, all occupied
     CHECK(nearestNeighborCount(6, grid.data()) == 3U);   //bulk, one empty
+    CHECK(normalizeNearestNeighborCount(0) == 0.0);
+    CHECK(normalizeNearestNeighborCount(2) == 0.5);
+    CHECK(normalizeNearestNeighborCount(4) == 1.0);
 
     CHECK(areNearestNeighbors(0,1) == true);
     CHECK(areNearestNeighbors(1,0) == true);
@@ -273,5 +276,4 @@ TEST_CASE("nearest neighbor bond difference agrees with full recount"){
             }
         }
 }
-
 

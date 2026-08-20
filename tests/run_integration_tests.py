@@ -125,12 +125,14 @@ def direct_pairwise_probability(coordinates, grid_size, hopping_distance, delta_
 
 
 def main():
-    if len(sys.argv) != 2:
-        print(f"usage: {pathlib.Path(sys.argv[0]).name} GRASSHOPPER_EXECUTABLE",
+    if len(sys.argv) != 3:
+        print(f"usage: {pathlib.Path(sys.argv[0]).name} "
+              "GRASSHOPPER_EXECUTABLE CORRELATION_EXECUTABLE",
               file=sys.stderr)
         return 2
 
     executable = pathlib.Path(sys.argv[1]).resolve()
+    correlation_executable = pathlib.Path(sys.argv[2]).resolve()
     command = [
         str(executable),
         "-N", "4",
@@ -152,6 +154,8 @@ def main():
 
     try:
         require(executable.is_file(), f"executable not found: {executable}")
+        require(correlation_executable.is_file(),
+                f"executable not found: {correlation_executable}")
 
         with tempfile.TemporaryDirectory(prefix="grasshopper2d-integration-") as directory:
             working_directory = pathlib.Path(directory)
@@ -248,7 +252,7 @@ def main():
             ("undersized odd grid", 7, 0),
             ("undersized even grid", 8, 1),
         ]
-        expected_error = "Grid size is too small for the hopping-distance support."
+        expected_error = "Grid size is too small for the requested interaction-distance support."
 
         for case_name, case_grid_size, delta_option in invalid_reach_cases:
             arguments = [
@@ -521,6 +525,113 @@ def main():
             require(blocked_artifact.is_dir(),
                     "directory output artifact was removed")
 
+        with tempfile.TemporaryDirectory(prefix="grasshopper2d-correlation-") as directory:
+            working_directory = pathlib.Path(directory)
+            coordinates = [40, 41]
+            correlation_distance = 1.5
+            correlation_grid_size = 9
+            delta_option = 0
+            metadata_path = working_directory / "result.dat"
+            configuration_path = working_directory / "configuration.dat"
+            output_path = working_directory / "correlations.dat"
+
+            metadata_path.write_text(
+                "Hopping distance: 1.5\n"
+                "Size of grid: 9\n"
+                "Option for delta-function discretization: 0\n"
+                "Total number of spins: 2\n",
+                encoding="utf-8")
+            configuration_path.write_text("40\n41\n", encoding="utf-8")
+            output_path.write_text("stale correlation output\n", encoding="utf-8")
+            command = [
+                str(correlation_executable),
+                "-config", str(configuration_path),
+            ]
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+
+            require(completed.returncode == 0,
+                    f"correlation tool exited with status {completed.returncode}")
+            require(completed.stderr == "", f"unexpected warning: {completed.stderr!r}")
+
+            output_lines = output_path.read_text(encoding="utf-8").splitlines()
+            expected_header = (
+                "# cell x y occupation local_grasshopper_probability nn_fraction")
+            require(output_lines and output_lines[0] == expected_header,
+                    "correlation output header does not match its documented schema")
+            require(len(output_lines) == correlation_grid_size ** 2 + 1,
+                    "correlation output does not contain one row per grid site")
+
+            rows = []
+            for cell, line in enumerate(output_lines[1:]):
+                fields = line.split()
+                require(len(fields) == 6,
+                        f"correlation row {cell} does not contain six columns")
+                try:
+                    row = [float(field) for field in fields]
+                except ValueError as error:
+                    raise IntegrationTestFailure(
+                        f"correlation row {cell} contains invalid numeric data") from error
+                require(row[0] == cell,
+                        f"correlation row {cell} has the wrong flattened index")
+                require(row[1] == cell % correlation_grid_size
+                        and row[2] == cell // correlation_grid_size,
+                        f"correlation row {cell} has incorrect lattice coordinates")
+                rows.append(row)
+
+            require(rows[40][3] == 1.0 and rows[41][3] == 1.0,
+                    "occupied correlation rows were not marked occupied")
+            require(rows[31][3] == 0.0,
+                    "unoccupied correlation row was not emitted")
+
+            cell_size = 1.0 / math.sqrt(len(coordinates))
+            normalized_offset = abs(correlation_distance - cell_size) / cell_size
+            expected_local_probability = (
+                reference_contribution_energy(normalized_offset, delta_option)
+                / (2.0 * math.pi * correlation_distance * math.sqrt(len(coordinates))))
+            require(math.isclose(rows[40][4], expected_local_probability,
+                                 rel_tol=0.0, abs_tol=1.0e-12),
+                    "normalized local grasshopper probability is incorrect")
+            require(rows[40][5] == 0.25,
+                    "occupied-site nearest-neighbor fraction is incorrect")
+            require(rows[31][5] == 0.25,
+                    "unoccupied-site nearest-neighbor fraction is incorrect")
+
+            stdout_values = {}
+            for line in completed.stdout.splitlines():
+                label, separator, value = line.partition(": ")
+                if separator:
+                    stdout_values[label] = value
+            required_stdout_labels = {
+                "Requested distance",
+                "Global grasshopper probability",
+                "Global nearest-neighbor probability",
+                "Output file",
+            }
+            require(required_stdout_labels <= stdout_values.keys(),
+                    "correlation stdout is missing a required summary field")
+            expected_global_probability = direct_pairwise_probability(
+                coordinates, correlation_grid_size,
+                correlation_distance, delta_option)
+            require(math.isclose(float(stdout_values["Requested distance"]),
+                                 correlation_distance,
+                                 rel_tol=0.0, abs_tol=1.0e-15),
+                    "requested distance was not reported correctly")
+            require(math.isclose(float(stdout_values["Global grasshopper probability"]),
+                                 expected_global_probability,
+                                 rel_tol=0.0, abs_tol=1.0e-12),
+                    "global grasshopper probability is incorrect")
+            require(float(stdout_values["Global nearest-neighbor probability"]) == 0.25,
+                    "global nearest-neighbor probability is incorrect")
+            require(stdout_values["Output file"] == "correlations.dat",
+                    "correlation output filename was not reported")
+
     except (IntegrationTestFailure, OSError, subprocess.SubprocessError) as error:
         print(f"integration tests: FAIL: {error}", file=sys.stderr)
         print("command: " + " ".join(command), file=sys.stderr)
@@ -531,7 +642,7 @@ def main():
             print(completed.stderr, file=sys.stderr)
         return 1
 
-    print("integration tests: PASS (24 tests)")
+    print("integration tests: PASS (25 tests)")
     return 0
 
 

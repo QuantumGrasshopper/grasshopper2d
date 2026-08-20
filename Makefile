@@ -10,6 +10,8 @@ LDFLAGS = -lgsl -lgslcblas -lm
 PYTHON ?= python3
 
 OBJS = main.o interactions.o output.o setup.o annealing.o parameters.o
+CORRELATION_BIN = tools/correlations
+CORRELATION_OBJ = tools/correlation_functions.o
 TEST_BIN = tests/grasshopper_tests
 TEST_SRCS = tests/test_main.cpp \
 		tests/test_globals.cpp \
@@ -28,6 +30,9 @@ grasshopper:  $(OBJS)
 $(TEST_BIN): $(TEST_OBJS) $(TEST_PRODUCTION_OBJS)
 	$(LD) $(TEST_OBJS) $(TEST_PRODUCTION_OBJS) -o $(TEST_BIN) $(LDFLAGS)
 
+$(CORRELATION_BIN): $(CORRELATION_OBJ) interactions.o output.o
+	$(LD) $(CORRELATION_OBJ) interactions.o output.o -o $(CORRELATION_BIN) $(LDFLAGS)
+
 # create .o-files from .cpp-files using g++
 main.o: main.cpp utilities.hpp interactions.hpp output.hpp setup.hpp annealing.hpp parameters.hpp
 	$(CXX) $(CXXFLAGS) -c main.cpp
@@ -41,6 +46,8 @@ annealing.o: annealing.cpp annealing.hpp utilities.hpp
 	$(CXX) $(CXXFLAGS) -c annealing.cpp
 parameters.o: parameters.cpp parameters.hpp
 	$(CXX) $(CXXFLAGS) -c parameters.cpp
+$(CORRELATION_OBJ): tools/correlation_functions.cpp interactions.hpp output.hpp utilities.hpp
+	$(CXX) $(CXXFLAGS) -c tools/correlation_functions.cpp -o $(CORRELATION_OBJ)
 
 tests/%.o: tests/%.cpp tests/doctest/doctest.h utilities.hpp interactions.hpp output.hpp setup.hpp annealing.hpp parameters.hpp
 	$(CXX) $(CXXFLAGS) -I. -Itests -c $< -o $@
@@ -48,14 +55,16 @@ tests/%.o: tests/%.cpp tests/doctest/doctest.h utilities.hpp interactions.hpp ou
 test: $(TEST_BIN)
 	./$(TEST_BIN)
 
-integration-test: grasshopper
-	$(PYTHON) tests/run_integration_tests.py ./grasshopper
+correlation-tool: $(CORRELATION_BIN)
+
+integration-test: grasshopper $(CORRELATION_BIN)
+	$(PYTHON) tests/run_integration_tests.py ./grasshopper ./$(CORRELATION_BIN)
 
 check: test integration-test
 
 # clean up
-.PHONY: clean tidy test integration-test check
+.PHONY: clean tidy test correlation-tool integration-test check
 clean:
-	rm -f *~ *.o $(TEST_OBJS) $(TEST_BIN)
+	rm -f *~ *.o $(TEST_OBJS) $(TEST_BIN) $(CORRELATION_OBJ) $(CORRELATION_BIN)
 tidy:	clean
 	rm -f grasshopper

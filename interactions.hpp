@@ -32,4 +32,5 @@ int nearestNeighborBondDifference(const unsigned int oldCell, const unsigned int
 //normalizations
 double normalizeGrasshopperEnergy(double energy, double distance);
 double normalizeGrasshopperInteraction(double interaction, double distance);
+double normalizeNearestNeighborCount(unsigned int count);
 double nearestNeighborProbability(long long nearestNeighborBonds);
