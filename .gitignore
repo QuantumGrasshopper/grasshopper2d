@@ -27,6 +27,7 @@ grasshopper
 /tools/correlations
 runs/
 /benchmarks/results/
+/benchmarks/archive/
 benchmarks/grasshopper_energygrid
 benchmarks/grasshopper_storage_unique
 benchmarks/grasshopper_storage_vector
