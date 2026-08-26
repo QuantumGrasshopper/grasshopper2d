@@ -217,14 +217,6 @@ TEST_CASE("nearest neighbor contribution"){
     CHECK(areNearestNeighbors(7,3) == true);
     CHECK(areNearestNeighbors(3,3) == false);
 
-    CHECK(nearestNeighborBondDifference(13, 5, grid.data()) == 1);
-    CHECK(nearestNeighborBondDifference(12, 5, grid.data()) == 2);
-    CHECK(nearestNeighborBondDifference(10, 5, grid.data()) == 0);
-    CHECK(nearestNeighborBondDifference(0, 15, grid.data()) == 0);
-    CHECK(nearestNeighborBondDifference(10, 15, grid.data()) == -2);
-    CHECK(nearestNeighborBondDifference(6, 5, grid.data()) == 0);
-    CHECK(nearestNeighborBondDifference(11, 15, grid.data()) == -1);
-
 }
 
 TEST_CASE("nearest neighbor bond difference agrees with full recount"){

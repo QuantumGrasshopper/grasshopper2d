@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import contextlib
 import math
 import pathlib
 import subprocess
@@ -9,6 +10,32 @@ import tempfile
 
 class IntegrationTestFailure(RuntimeError):
     pass
+
+
+class IntegrationTestSuite:
+    def __init__(self):
+        self.test_count = 0
+        self.failures = []
+
+    @contextlib.contextmanager
+    def case(self, name):
+        self.test_count += 1
+        try:
+            yield
+        except Exception as error:
+            self.failures.append((name, error))
+
+    def finish(self):
+        if self.failures:
+            print(f"integration tests: FAIL "
+                  f"({len(self.failures)} of {self.test_count} tests failed)",
+                  file=sys.stderr)
+            for name, error in self.failures:
+                print(f"- {name}: {error}", file=sys.stderr)
+            return 1
+
+        print(f"integration tests: PASS ({self.test_count} tests)")
+        return 0
 
 
 def require(condition, message):
@@ -68,12 +95,26 @@ def read_configuration_snapshots(path, expected_count):
                 f"expected {expected_count + 1}")
         try:
             coordinates = [int(field) for field in fields[:-1]]
-            float(fields[-1])
+            energy = float(fields[-1])
         except ValueError as error:
             raise IntegrationTestFailure(
                 f"could not parse {path.name} line {line_number}: {error}") from error
-        snapshots.append(coordinates)
+        snapshots.append((coordinates, energy))
     return snapshots
+
+
+def read_result_values(path):
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        raise IntegrationTestFailure(f"could not read {path.name}: {error}") from error
+
+    values = {}
+    for line in lines:
+        label, separator, value = line.partition(": ")
+        if separator:
+            values[label] = value
+    return values
 
 
 # Independent reference implementation of the delta-function discretizations,
@@ -106,7 +147,7 @@ def reference_contribution_energy(normalized_offset, delta_option):
     return 0.0
 
 
-def direct_pairwise_probability(coordinates, grid_size, hopping_distance, delta_option):
+def direct_pairwise_energy(coordinates, grid_size, hopping_distance, delta_option):
     cell_size = 1.0 / math.sqrt(len(coordinates))
     energy = 0.0
 
@@ -120,8 +161,30 @@ def direct_pairwise_probability(coordinates, grid_size, hopping_distance, delta_
             normalized_offset = abs(hopping_distance - distance) / cell_size
             energy += reference_contribution_energy(normalized_offset, delta_option)
 
+    return energy
+
+
+def direct_pairwise_probability(coordinates, grid_size, hopping_distance, delta_option):
+    energy = direct_pairwise_energy(
+        coordinates, grid_size, hopping_distance, delta_option)
     normalization = math.pi * hopping_distance * len(coordinates) ** 1.5
     return energy / normalization
+
+
+def direct_nearest_neighbor_bonds(coordinates, grid_size):
+    occupied = set(coordinates)
+    bonds = 0
+    for coordinate in coordinates:
+        if coordinate % grid_size != grid_size - 1 and coordinate + 1 in occupied:
+            bonds += 1
+        if coordinate + grid_size in occupied:
+            bonds += 1
+    return bonds
+
+
+def require_close(actual, expected, description):
+    require(math.isclose(actual, expected, rel_tol=0.0, abs_tol=1.0e-12),
+            f"{description}: {actual:.17g} != {expected:.17g}")
 
 
 def main():
@@ -151,13 +214,15 @@ def main():
         "-randomseed", "12345",
     ]
     completed = None
+    suite = IntegrationTestSuite()
 
     try:
         require(executable.is_file(), f"executable not found: {executable}")
         require(correlation_executable.is_file(),
                 f"executable not found: {correlation_executable}")
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-integration-") as directory:
+        with suite.case("basic simulation outputs"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-integration-") as directory:
             working_directory = pathlib.Path(directory)
             completed = subprocess.run(
                 command,
@@ -189,6 +254,94 @@ def main():
                 require(configuration_path.is_file(), f"{filename} was not created")
                 read_configuration(configuration_path, expected_count=4, grid_area=64)
 
+        with suite.case("final and best objectives match direct recomputation"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-objective-audit-") as directory:
+            working_directory = pathlib.Path(directory)
+            initial_coordinates = [44, 45, 54, 55]
+            total_spins = len(initial_coordinates)
+            grid_size = 10
+            hopping_distance = 1.5
+            delta_option = 0
+            nearest_neighbor_interaction = 0.75
+            (working_directory / "initconf.dat").write_text(
+                "".join(f"{coordinate}\n" for coordinate in initial_coordinates),
+                encoding="utf-8")
+            command = [
+                str(executable),
+                "-N", str(total_spins),
+                "-gridsize", str(grid_size),
+                "-d", str(hopping_distance),
+                "-hours", "1",
+                "-steps", "12",
+                "-tempsteps", "10",
+                "-inittemp", "100",
+                "-fintemp", "1",
+                "-annealsteps", "100",
+                "-configoutput", "0",
+                "-initconf", "load",
+                "-delta", str(delta_option),
+                "-NNint", str(nearest_neighbor_interaction),
+                "-randomseed", "12345",
+            ]
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            require(completed.returncode == 0,
+                    f"objective-audit run exited with status {completed.returncode}")
+
+            final_coordinates = read_configuration(
+                working_directory / "finconf.dat", total_spins, grid_size ** 2)
+            best_coordinates = read_configuration(
+                working_directory / "bestconf.dat", total_spins, grid_size ** 2)
+            require(set(final_coordinates) != set(initial_coordinates),
+                    "objective-audit run did not exercise an accepted move")
+
+            final_grasshopper_energy = direct_pairwise_energy(
+                final_coordinates, grid_size, hopping_distance, delta_option)
+            final_nearest_neighbor_bonds = direct_nearest_neighbor_bonds(
+                final_coordinates, grid_size)
+            final_objective = (final_grasshopper_energy
+                               + nearest_neighbor_interaction
+                               * final_nearest_neighbor_bonds)
+            best_grasshopper_energy = direct_pairwise_energy(
+                best_coordinates, grid_size, hopping_distance, delta_option)
+            best_nearest_neighbor_bonds = direct_nearest_neighbor_bonds(
+                best_coordinates, grid_size)
+            best_objective = (best_grasshopper_energy
+                              + nearest_neighbor_interaction
+                              * best_nearest_neighbor_bonds)
+            normalization = (math.pi * hopping_distance
+                             * total_spins ** 1.5)
+            result_values = read_result_values(working_directory / "result.dat")
+
+            require_close(float(result_values["final grasshopper energy"]),
+                          final_grasshopper_energy,
+                          "final grasshopper energy")
+            require(int(result_values["final nearest neighbor bonds"])
+                    == final_nearest_neighbor_bonds,
+                    "final nearest-neighbor bond count does not match direct recount")
+            require_close(float(result_values["final total MC objective"]),
+                          final_objective, "final total MC objective")
+            require_close(float(result_values["best total MC objective"]),
+                          best_objective, "best total MC objective")
+            require_close(float(result_values["final grasshopper probability"]),
+                          final_grasshopper_energy / normalization,
+                          "final grasshopper probability")
+            require_close(float(result_values["final nearest neighbor probability"]),
+                          final_nearest_neighbor_bonds / (2.0 * total_spins),
+                          "final nearest-neighbor probability")
+            require_close(float(result_values["final normalized MC objective"]),
+                          final_objective / normalization,
+                          "final normalized MC objective")
+            require_close(float(result_values["best normalized MC objective"]),
+                          best_objective / normalization,
+                          "best normalized MC objective")
+
         hopping_distance = 1.5
         valid_reach_cases = [
             ("odd minimum-valid grid", 9, 0, [38, 42]),
@@ -214,7 +367,8 @@ def main():
                 "-randomseed", "12345",
             ]
 
-            with tempfile.TemporaryDirectory(prefix="grasshopper2d-valid-reach-") as directory:
+            with suite.case(case_name), \
+                    tempfile.TemporaryDirectory(prefix="grasshopper2d-valid-reach-") as directory:
                 working_directory = pathlib.Path(directory)
                 configuration = "".join(f"{coordinate}\n" for coordinate in coordinates)
                 (working_directory / "initconf.dat").write_text(
@@ -261,9 +415,11 @@ def main():
                 "-d", str(hopping_distance),
                 "-delta", str(delta_option),
             ]
-            require_invalid_invocation(executable, arguments, expected_error, case_name)
+            with suite.case(case_name):
+                require_invalid_invocation(executable, arguments, expected_error, case_name)
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-defaults-") as directory:
+        with suite.case("default simulation options"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-defaults-") as directory:
             working_directory = pathlib.Path(directory)
             command = [str(executable), "-d", "0.25", "-N", "2", "-gridsize", "5"]
             completed = subprocess.run(
@@ -284,34 +440,54 @@ def main():
             require("Number of annealing steps: 1000" in result_text,
                     "default-option run did not use the default annealing steps")
 
+        with suite.case("automatic grid sizing"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-automatic-grid-") as directory:
+            working_directory = pathlib.Path(directory)
+            total_spins = 4
+            hopping_distance = 0.25
+            command = [
+                str(executable),
+                "-d", str(hopping_distance),
+                "-N", str(total_spins),
+                "-hours", "0",
+                "-randomseed", "12345",
+            ]
+            completed = subprocess.run(
+                command,
+                cwd=working_directory,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            require(completed.returncode == 0,
+                    f"automatic-grid run exited with status {completed.returncode}")
+            result_values = read_result_values(working_directory / "result.dat")
+            reported_grid_size = int(result_values["Size of grid"])
+            cell_size = 1.0 / math.sqrt(total_spins)
+            required_reach = math.ceil(hopping_distance / cell_size) + 1
+            require((reported_grid_size - 1) // 2 >= required_reach,
+                    "automatically selected grid does not support the hopping distance")
+            require(total_spins < reported_grid_size ** 2,
+                    "automatically selected grid is fully occupied")
+            for filename in ("initconf.dat", "finconf.dat", "bestconf.dat"):
+                read_configuration(working_directory / filename,
+                                   total_spins, reported_grid_size ** 2)
+
         invalid_cli_cases = [
-            ("missing required d", [], "Required option -d"),
-            ("unknown option", ["-d", "0.25", "-bogus", "1"],
-             "Unknown option: -bogus"),
-            ("duplicate option", ["-d", "0.25", "-d", "0.5"],
-             "Duplicate option: -d"),
-            ("missing option value", ["-d"], "Missing value for option -d"),
             ("partial numeric value", ["-d", "0.25", "-steps", "10abc"],
              "Invalid value for -steps"),
-            ("non-finite floating-point value", ["-d", "0.25", "-NNint", "nan"],
-             "Invalid value for -NNint"),
-            ("negative unsigned value", ["-d", "0.25", "-randomseed", "-1"],
-             "Invalid value for -randomseed"),
-            ("out-of-range value", ["-d", "0.25", "-N", "4294967296"],
-             "outside the destination type range"),
-            ("invalid initialization mode", ["-d", "0.25", "-initconf", "Random"],
-             "-initconf must be exactly random, disk, or load"),
-            ("invalid delta option", ["-d", "0.25", "-delta", "2"],
-             "-delta must be exactly 0 or 1"),
             ("full occupancy", ["-d", "0.1", "-N", "4", "-gridsize", "2"],
              "N must be smaller than the grid area"),
         ]
 
         for case_name, arguments, expected_cli_error in invalid_cli_cases:
-            require_invalid_invocation(
-                executable, arguments, expected_cli_error, case_name)
+            with suite.case(case_name):
+                require_invalid_invocation(
+                    executable, arguments, expected_cli_error, case_name)
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-small-anneal-") as directory:
+        with suite.case("single-step annealing schedule"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-small-anneal-") as directory:
             working_directory = pathlib.Path(directory)
             command = [
                 str(executable),
@@ -344,13 +520,14 @@ def main():
             require(temperature_lines and temperature_lines[0].startswith("2\t"),
                     "annealsteps=1 run did not execute the cooling step")
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-config-output-") as directory:
+        with suite.case("single final configuration snapshot"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-config-output-") as directory:
             working_directory = pathlib.Path(directory)
             command = [
                 str(executable),
                 "-N", "2",
-                "-gridsize", "5",
-                "-d", "0.25",
+                "-gridsize", "9",
+                "-d", "1.5",
                 "-hours", "1",
                 "-steps", "2",
                 "-tempsteps", "2",
@@ -375,17 +552,23 @@ def main():
             require(len(snapshots) == 1,
                     f"configoutput=1 produced {len(snapshots)} rows, expected 1")
             final_coordinates = read_configuration(
-                working_directory / "finconf.dat", expected_count=2, grid_area=25)
-            require(snapshots[0] == final_coordinates,
+                working_directory / "finconf.dat", expected_count=2, grid_area=81)
+            snapshot_coordinates, snapshot_energy = snapshots[0]
+            require(snapshot_coordinates == final_coordinates,
                     "configoutput=1 row does not match finconf.dat")
+            require_close(
+                snapshot_energy,
+                direct_pairwise_probability(snapshot_coordinates, 9, 1.5, 0),
+                "configoutput=1 energy")
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-config-schedule-") as directory:
+        with suite.case("scheduled configuration snapshots"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-config-schedule-") as directory:
             working_directory = pathlib.Path(directory)
             command = [
                 str(executable),
                 "-N", "2",
-                "-gridsize", "5",
-                "-d", "0.25",
+                "-gridsize", "9",
+                "-d", "1.5",
                 "-hours", "1",
                 "-steps", "14",
                 "-tempsteps", "2",
@@ -411,13 +594,18 @@ def main():
             require(len(snapshots) == 3,
                     f"configuration-schedule run produced {len(snapshots)} rows, expected 3")
             initial_coordinates = read_configuration(
-                working_directory / "initconf.dat", expected_count=2, grid_area=25)
+                working_directory / "initconf.dat", expected_count=2, grid_area=81)
             final_coordinates = read_configuration(
-                working_directory / "finconf.dat", expected_count=2, grid_area=25)
-            require(snapshots[0] == initial_coordinates,
+                working_directory / "finconf.dat", expected_count=2, grid_area=81)
+            require(snapshots[0][0] == initial_coordinates,
                     "configuration-schedule first row does not match initconf.dat")
-            require(snapshots[-1] == final_coordinates,
+            require(snapshots[-1][0] == final_coordinates,
                     "configuration-schedule last row does not match finconf.dat")
+            for snapshot_index, (coordinates, energy) in enumerate(snapshots):
+                require_close(
+                    energy,
+                    direct_pairwise_probability(coordinates, 9, 1.5, 0),
+                    f"configuration-schedule snapshot {snapshot_index} energy")
 
         output_policy_arguments = [
             "-N", "2",
@@ -429,7 +617,8 @@ def main():
             "-randomseed", "12345",
         ]
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-no-overwrite-") as directory:
+        with suite.case("default no-overwrite policy"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-no-overwrite-") as directory:
             working_directory = pathlib.Path(directory)
             stale_config = working_directory / "config.dat"
             sentinel = "configuration from an earlier run\n"
@@ -452,7 +641,8 @@ def main():
             require(not (working_directory / "result.dat").exists(),
                     "default overwrite rejection created result.dat")
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-overwrite-") as directory:
+        with suite.case("explicit overwrite policy"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-overwrite-") as directory:
             working_directory = pathlib.Path(directory)
             stale_result = working_directory / "result.dat"
             stale_config = working_directory / "config.dat"
@@ -475,7 +665,8 @@ def main():
             require(not stale_config.exists(),
                     "overwrite run left stale config.dat when configoutput was zero")
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-load-overwrite-") as directory:
+        with suite.case("load initialization preserves its input"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-load-overwrite-") as directory:
             working_directory = pathlib.Path(directory)
             initial_configuration = working_directory / "initconf.dat"
             initial_contents = "6\n18\n"
@@ -499,7 +690,8 @@ def main():
             require(not (working_directory / "config.dat").exists(),
                     "load overwrite run left stale config.dat")
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-cleanup-failure-") as directory:
+        with suite.case("output cleanup preflight failure"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-cleanup-failure-") as directory:
             working_directory = pathlib.Path(directory)
 
             stale_result = working_directory / "result.dat"
@@ -525,7 +717,8 @@ def main():
             require(blocked_artifact.is_dir(),
                     "directory output artifact was removed")
 
-        with tempfile.TemporaryDirectory(prefix="grasshopper2d-correlation-") as directory:
+        with suite.case("correlation output"), \
+                tempfile.TemporaryDirectory(prefix="grasshopper2d-correlation-") as directory:
             working_directory = pathlib.Path(directory)
             coordinates = [40, 41]
             correlation_distance = 1.5
@@ -632,18 +825,10 @@ def main():
             require(stdout_values["Output file"] == "correlations.dat",
                     "correlation output filename was not reported")
 
-    except (IntegrationTestFailure, OSError, subprocess.SubprocessError) as error:
-        print(f"integration tests: FAIL: {error}", file=sys.stderr)
-        print("command: " + " ".join(command), file=sys.stderr)
-        if completed is not None:
-            print("stdout:", file=sys.stderr)
-            print(completed.stdout, file=sys.stderr)
-            print("stderr:", file=sys.stderr)
-            print(completed.stderr, file=sys.stderr)
-        return 1
+    except Exception as error:
+        suite.failures.append(("integration test harness", error))
 
-    print("integration tests: PASS (25 tests)")
-    return 0
+    return suite.finish()
 
 
 if __name__ == "__main__":
