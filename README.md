@@ -95,3 +95,9 @@ The plot-only Python script reads this spatial output without repeating any corr
 > `python3 tools/correlation_plot.py correlations.dat`
 
 It requires NumPy and Matplotlib. By default it plots occupation, normalized local grasshopper probability over the full grid, and the same probability masked to occupied cells. Use repeated `--field` options to plot only selected fields, and `--save FILE` to write the figure instead of opening an interactive window. Normal simulation builds and C++ unit tests do not require these Python plotting dependencies.
+
+## 5. License
+
+This software is distributed under the GNU General Public License version 3 or, at your option, any later version (GPL-3.0-or-later). See [LICENSE](LICENSE) for details.
+
+Third-party components retain their respective licenses.
