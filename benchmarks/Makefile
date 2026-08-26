@@ -4,8 +4,6 @@ LDFLAGS ?=
 LDLIBS ?= -lgsl -lgslcblas -lm
 
 BENCHMARK_CPPFLAGS = -I..
-NEIGHBOR_BENCHMARK = grasshopper_neighbor_benchmark
-NEIGHBOR_BENCHMARK_OBJS = grasshopper_neighbor_benchmark.o interactions_benchmark.o
 
 BENCHMARKS = \
 	grasshopper_relative_neighbors \
