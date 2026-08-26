@@ -66,7 +66,6 @@ Python scripts for plotting spin configurations and other tools can be found in 
 - `anneal_animation.py` generates an animation of the simulated annealing process from the file `config.dat`, which is output by the main code. The size of the grid is read automatically from `result.dat`, which must be present.
 - `anneal_frame.py` plots individual frames from `config.dat` rather than creating the full animation.
 - `extract_boundary.py` extracts the boundary of a cogwheel shape (read from `finconf.dat`) and returns it in the polar coordinate representation (rho vs. phi). The files `finconf.dat` and `result.dat` must be present.
-- `finite_temp_analysis.py` contains several routines for analyzing output from simulations that ran at constant temperature. It automatically generates several figures. The root directory must be manually adjusted.
 
 ## 4. Spatial correlation analysis
 

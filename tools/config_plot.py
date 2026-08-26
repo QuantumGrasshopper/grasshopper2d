@@ -1,14 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def read_result_value(label, value_type):
+    with open("result.dat") as f:
+        for line in f:
+            key, separator, value = line.partition(":")
+            if separator and key.strip() == label:
+                return value_type(value.strip())
+    raise ValueError(f"Could not find '{label}' in result.dat")
+
+gridsize = read_result_value("Size of grid", int)
+
 inputfile = input("Name of file containing spin configuration: ")
-
-with open("result.dat") as f:
-    lines = f.readlines()
-    gridsize = int(lines[5].strip().split(" ")[-1])
-
 data = np.loadtxt(inputfile, dtype = int)
-numberspins = len(data)
 
 zvals = np.zeros((gridsize,gridsize))
 for i in data:

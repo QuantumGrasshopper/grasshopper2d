@@ -2,11 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import matplotlib.animation as anim
 
-data = np.loadtxt("config.dat", dtype = float)
+def read_result_value(label, value_type):
+    with open("result.dat") as f:
+        for line in f:
+            key, separator, value = line.partition(":")
+            if separator and key.strip() == label:
+                return value_type(value.strip())
+    raise ValueError(f"Could not find '{label}' in result.dat")
 
-with open("result.dat") as f:
-    lines = f.readlines()
-    gridsize = int(lines[5].strip().split(" ")[-1])
+gridsize = read_result_value("Size of grid", int)
+
+data = np.atleast_2d(np.loadtxt("config.dat", dtype=float))
 
 fig = plt.figure()
 
@@ -19,6 +25,6 @@ def animation_function(i):
         zvals[x,y] = 1
     plt.imshow(zvals, interpolation='None', cmap='Greens')
   
-animation = anim.FuncAnimation(fig, animation_function, interval = 2)
+animation = anim.FuncAnimation(fig, animation_function, frames=len(data), interval=2)
 
 plt.show()
