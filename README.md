@@ -10,6 +10,8 @@ Currently implemented for a square grid and with simulated annealing
 
 To compile the code, type `make` in the shell while in the folder containing the code. This uses the default GCC compiler. To use a different compiler, for example Clang, type `make CXX=clang++`, etc.
 
+Optional performance benchmarks and their build instructions are documented in [`benchmarks/README.md`](benchmarks/README.md).
+
 ## 2. Code options (the order doesn't matter)
 
 | option          | comment |
@@ -35,8 +37,6 @@ Required options: `d`
 Recommended options: `N`, `gridsize`, `hours`
 
 Every option accepts exactly one value and may be supplied at most once. Unknown options, missing values, malformed or out-of-range numbers, and non-finite floating-point values are rejected. The number of spins must satisfy `0 < N < gridsize^2` after automatic or explicit grid sizing.
-
-You can also look into the source code to remind yourself of what the options do.
 
 The code uses the following standard output files:
 

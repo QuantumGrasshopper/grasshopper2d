@@ -1,46 +1,32 @@
+CXX ?= g++
+CXXFLAGS ?= -O3 -std=c++17
+LDFLAGS ?=
+LDLIBS ?= -lgsl -lgslcblas -lm
 
-# declare variables
-CXX = g++
-#CXX = clang++-9
-LD = $(CXX)
-# CXXFLAGS = -g -pg -O1 -Wall -std=c++17
-# LDFLAGS = -g -pg -lgsl -lgslcblas -lm
-CXXFLAGS = -O3 -Wall -std=c++17
-LDFLAGS = -lgsl -lgslcblas -lm
+BENCHMARK_CPPFLAGS = -I..
+NEIGHBOR_BENCHMARK = grasshopper_neighbor_benchmark
+NEIGHBOR_BENCHMARK_OBJS = grasshopper_neighbor_benchmark.o interactions_benchmark.o
 
-OBJS = grasshopper.o common.o
+BENCHMARKS = \
+	grasshopper_relative_neighbors \
+	grasshopper_neighbor_template
 
-STORAGE_BENCH_SOURCE = grasshopper_storage_benchmark.cpp
-STORAGE_BENCHMARKS = grasshopper_storage_vla \
-	grasshopper_storage_unique \
-	grasshopper_storage_vector
+COMMON_OBJ = interactions_benchmark.o
 
-# link .o-files to program
-grasshopper:  $(OBJS)
-	$(LD) $(OBJS) -o grasshopper $(LDFLAGS)
+.PHONY: all active-benchmarks clean
 
-# create .o-files from .cpp-files using g++
-grasshopper.o: grasshopper.cpp common.hpp
-	$(CXX) $(CXXFLAGS) -c grasshopper.cpp
-common.o: common.cpp common.hpp
-	$(CXX) $(CXXFLAGS) -c common.cpp
+all: active-benchmarks
 
-.PHONY: storage-benchmarks
-storage-benchmarks: $(STORAGE_BENCHMARKS)
+active-benchmarks: $(BENCHMARKS)
 
-grasshopper_storage_vla: $(STORAGE_BENCH_SOURCE) common.o common.hpp
-	$(CXX) $(CXXFLAGS) -DSTORAGE_VLA=1 $(STORAGE_BENCH_SOURCE) common.o -o $@ $(LDFLAGS)
+$(BENCHMARKS): %: %.o $(COMMON_OBJ)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
 
-grasshopper_storage_unique: $(STORAGE_BENCH_SOURCE) common.o common.hpp
-	$(CXX) $(CXXFLAGS) -DSTORAGE_UNIQUE_PTR=1 $(STORAGE_BENCH_SOURCE) common.o -o $@ $(LDFLAGS)
+%.o: %.cpp ../interactions.hpp ../utilities.hpp
+	$(CXX) $(CPPFLAGS) $(BENCHMARK_CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
-grasshopper_storage_vector: $(STORAGE_BENCH_SOURCE) common.o common.hpp
-	$(CXX) $(CXXFLAGS) -DSTORAGE_VECTOR=1 $(STORAGE_BENCH_SOURCE) common.o -o $@ $(LDFLAGS)
+interactions_benchmark.o: ../interactions.cpp ../interactions.hpp ../utilities.hpp
+	$(CXX) $(CPPFLAGS) $(BENCHMARK_CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
-
-# clean up
-.PHONY: clean tidy
 clean:
-	rm -f *~ *.o $(STORAGE_BENCHMARKS)
-tidy:	clean
-	rm -f grasshopper
+	$(RM) *.o $(BENCHMARKS)

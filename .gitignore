@@ -28,8 +28,6 @@ grasshopper
 runs/
 /benchmarks/results/
 /benchmarks/archive/
-benchmarks/grasshopper_energygrid
-benchmarks/grasshopper_storage_unique
-benchmarks/grasshopper_storage_vector
-benchmarks/grasshopper_storage_vla
+benchmarks/grasshopper_relative_neighbors
+benchmarks/grasshopper_neighbor_template
 tools/.ipynb_checkpoints/
