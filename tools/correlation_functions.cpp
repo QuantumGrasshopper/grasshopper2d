@@ -323,6 +323,8 @@ int main(int argc, char* argv[]) {
         const double totalInteraction =
             totalGrasshopperInteraction(occupation.data(), interactionGrid);
 
+        // Retain local nearest neighbor counts for every site, including empty sites.
+        // The global bond total uses occupied sites only and halves to undo double counting.
         std::vector<unsigned int> nearestNeighborCounts(gridArea);
         long long nearestNeighborBonds = 0;
         for (unsigned int cell = 0; cell < gridArea; ++cell) {
@@ -342,6 +344,8 @@ int main(int argc, char* argv[]) {
         output << std::setprecision(std::numeric_limits<double>::max_digits10);
         output << "# cell x y occupation local_grasshopper_probability nn_fraction\n";
 
+        // Output the interaction field over the full lattice; occupation is a separate
+        // column so later post-processing can mask or inspect empty-site values.
         for (unsigned int cell = 0; cell < gridArea; ++cell) {
             output << cell << ' '
                    << xcoord(cell) << ' '

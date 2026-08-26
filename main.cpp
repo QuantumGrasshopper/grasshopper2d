@@ -52,6 +52,9 @@ int main(int inputN,char *inputV[]) {
         gridSize = *parameters.gridSize;
     }
     else {
+        // If no explicit gridSize is supplied, choose a generous default box to reduce effects of
+        // artificial open boundaries. In physical units the half-width is approximately 1 + 3*d.
+        // This gives ample space around the unit area lawn, the factor 3 is a conservative buffer.
         const double automaticHalfGridSize =
             sqrt(double(totalNumSpins)) + 3*d/cellSize + EPS;
         if (!isfinite(automaticHalfGridSize)
@@ -78,6 +81,8 @@ int main(int inputN,char *inputV[]) {
     long unsigned int maxsteps=parameters.maxSteps;
     
 	long unsigned int temproundsteps=parameters.temperatureRoundSteps.value_or(0UL);
+    // Default to one attempted move per spin. If the requested initial round exceeds
+    // the maximal total number of steps, shorten it to leave room for multiple rounds.
     if(temproundsteps>maxsteps) temproundsteps=maxsteps/1000UL;
     if(temproundsteps<10) temproundsteps=totalNumSpins;
     
@@ -87,6 +92,8 @@ int main(int inputN,char *inputV[]) {
     int numberannealingsteps=parameters.annealingSteps;
     tempScaling=pow((finaltemperature/temperature),1./double(numberannealingsteps));
     int configOutputs = parameters.configurationOutputs; // maximal number of configuration snapshots to save for animation
+    // Reserve rows for the initial and actual final states; distribute the
+    // remaining rows over distinct cooling stages, which are uniform in log T.
 	const int plannedIntermediateSnapshots = configOutputs >= 2
 	    ? min(configOutputs - 2, numberannealingsteps - 1) : 0;
 	int coolingStageIndex=0;
@@ -151,6 +158,7 @@ int main(int inputN,char *inputV[]) {
     
     initialize(grid.data(), spinArray.data(), RNG, initconf);
 
+    // energyGrid[i] is the grasshopper interaction contribution of a hypothetical spin at i with the current occupied set.
     auto energyGrid = buildGrasshopperInteractionGrid(grid.data(), interactionTable);
     double grasshopperEnergy = totalGrasshopperInteraction(grid.data(), energyGrid);
     
@@ -163,7 +171,7 @@ int main(int inputN,char *inputV[]) {
 		else {nearestNeighborBonds+=nearestNeighborCount(i, grid.data());}
 		}
 
-    nearestNeighborBonds /= 2;
+    nearestNeighborBonds /= 2;  //to compensate for double counting (a bond is counted from both end points)
     double energy = grasshopperEnergy + NNint*nearestNeighborBonds;
 		
     int bufferLimit = 10000;
@@ -172,6 +180,7 @@ int main(int inputN,char *inputV[]) {
 	energies.write(formatDouble(normalizeGrasshopperEnergy(energy,d)));
     BufferedFileWriter temperatures("temperatures.dat", bufferLimit, chrono::milliseconds(flushInterval));
 	ofstream configuration;
+    // output snapshot of normalized MC objective; equals grasshopper probability when NNint == 0
 	auto buildConfigurationSnapshot = [&]() {
 		ostringstream buffer;
 		for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
@@ -202,12 +211,15 @@ int main(int inputN,char *inputV[]) {
 		counter++; temproundcounter++;
 		
         // MC update
+        // choose one filled and one empty site
 		auto destroy=gsl_rng_uniform_int (RNG, totalNumSpins);
 		unsigned int oldSpinCoord=spinArray[destroy];
 		auto create=gsl_rng_uniform_int (RNG, gridArea-totalNumSpins);
 		unsigned int newSpinCoord=noSpinArray[create];
 		
 		double grasshopperDifference=energyGrid[newSpinCoord]-energyGrid[oldSpinCoord];
+        // F[new]-F[old] can include the old-new pair itself in F[new] while old is still occupied
+        // Remove that pair because old will be emptied if the update is successful
         if(isAround(d,euclideanDistance(findPosition(newSpinCoord),findPosition(oldSpinCoord))))//NOTE more efficient to keep this check explicit
             {
             grasshopperDifference -= contributionEnergy(d,euclideanDistance( findPosition(newSpinCoord),findPosition(oldSpinCoord) ));
@@ -222,13 +234,14 @@ int main(int inputN,char *inputV[]) {
 		
 		if(accept==true)
 			{
+            // update system state
 			grid[oldSpinCoord]=false; grid[newSpinCoord]=true;
 			spinArray[destroy]=newSpinCoord; noSpinArray[create]=oldSpinCoord;
             grasshopperEnergy += grasshopperDifference;
             nearestNeighborBonds += nearestNeighborDifference;
             energy = grasshopperEnergy + NNint*nearestNeighborBonds;
 
-            //update energy grid
+            // update energy field: remove the old site's contribution from every affected field value, then add the new site's
             for(unsigned int j=0;j<interactionTable[oldSpinCoord].size();j++)
                 {
                 energyGrid[interactionTable[oldSpinCoord][j].first] -= interactionTable[oldSpinCoord][j].second;
@@ -238,6 +251,7 @@ int main(int inputN,char *inputV[]) {
 				energyGrid[interactionTable[newSpinCoord][j].first] += interactionTable[newSpinCoord][j].second;
                 }
 			accepted_current++;
+            // keep track of optimal configuration and corresponding energy
 			if(energy>bestenergy)
 				{
                 bestenergy=energy; 
@@ -266,12 +280,12 @@ int main(int inputN,char *inputV[]) {
 						* numberannealingsteps
 						/ (plannedIntermediateSnapshots + 1));
 					if(coolingStageIndex == intermediateTarget) {
-						// Hold this row until a later cooling stage so an early stop
+						// Hold this row until a later cooling stage, so an early stop
 						// replaces it with the actual final configuration instead.
 						pendingIntermediateSnapshot = buildConfigurationSnapshot();
 						nextIntermediateSnapshot++;
-					}
-				}
+                        }
+                    }
 				}
 			accratio=accepted_current/double(temproundcounter);
             temperatures.write(to_string(counter) + '\t' + formatDouble(temperature)

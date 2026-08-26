@@ -48,10 +48,14 @@ double euclideanDistance(pair<int,int> point1, pair<int,int> point2)
 
 bool isAround(double have, double comparewith)
 	{
+	/// Tests whether two physical lengths differ by at most two cell widths,
+	/// which is the compact support of the smeared radial delta function.
 	if(abs(have-comparewith)/cellSize<=2) return true;
 	else return false;
 	}
 
+/// Grasshopper interaction contribution using the globally selected deltaOption
+/// The inputs are the distance between two points and the interaction distance (in any order)
 double contributionEnergy(double have, double comparewith)
 	{
 	double contribution=0;
@@ -92,6 +96,8 @@ GrasshopperInteractionTable buildInteractionTable(double distance){
 	vector< pair<int,double> > dNeighbourTemplate;
 	GrasshopperInteractionTable dNeighbourTable(gridArea);	//for each grid point: list of points that are its d-neighbours with corresponding energies
 
+	// first build the template around the grid center
+	// it contains the coordinate of all grid cells that can interact with the center point and the corresponding interaction contributions
     int center = (gridSize/2) * gridSize + gridSize/2;
     double thisEnergyContribution;
     pair<double,double> currentPosition=findPosition(center);
@@ -102,6 +108,7 @@ GrasshopperInteractionTable buildInteractionTable(double distance){
         if(thisEnergyContribution > EPS) dNeighbourTemplate.push_back(thisPair);
         }
 
+	// translate the template from the grid center to each grid site, taking into account the grid boundary
     const int signedGridSize = static_cast<int>(gridSize);
 	for(unsigned int j=0;j<dNeighbourTemplate.size();j++)
 		{
@@ -126,6 +133,8 @@ GrasshopperInteractionTable buildInteractionTable(double distance){
 
 std::vector<double> buildGrasshopperInteractionGrid(const unsigned char grid[], const GrasshopperInteractionTable& table){
 
+	// this table keeps track of grasshopper energy contributions of each grid point for the current configuration
+	// specifically, interactionGrid[i] = sum_j s_j w(i,j) for every grid site i, including empty sites
 	std::vector<double> interactionGrid(gridArea);
 	for(unsigned int i=0;i<gridArea;i++)
 		{
@@ -185,7 +194,7 @@ int nearestNeighborBondDifference(const unsigned int oldCell, const unsigned int
 
 //normalizations
 double normalizeGrasshopperEnergy(double energy, double distance){
-	// one factor of 1/2 is already taken care of by avoiding double counting
+	// energy counts each occupied pair once; P_G = energy / (pi * distance * N^(3/2))
     const double sqrtN = sqrt(static_cast<double>(totalNumSpins));
     return energy / (PI * distance * totalNumSpins * sqrtN);
 }

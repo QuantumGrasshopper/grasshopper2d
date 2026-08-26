@@ -7,11 +7,15 @@
 
 double temperatureDecrease(double temperature)
 	{
+	//exponential cooling schedule:
+	//every annealing round the temperature is multiplied by a constant factor
 	return tempScaling*temperature;
 	}
 	
 unsigned long stepIncrease(unsigned long temproundsteps)
 	{
+	//the number of MC proposals per temperature is increased as cooling proceeds
+	//to compensate for the decreasing acceptance rate at lower temperatures
 	const long double scaledSteps=static_cast<long double>(temproundsteps)/static_cast<long double>(tempScaling);
 	const long double unsignedLongUpperBound=
 		std::ldexp(1.0L, std::numeric_limits<unsigned long>::digits);

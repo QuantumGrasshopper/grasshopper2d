@@ -27,7 +27,7 @@ void initLoad(unsigned char grid[], int spinArray[]) {
         grid[i]=false;
         }
         
-    // Read in data checking that totalNumSpins and gridSize match
+    // Read exactly totalNumSpins unique flattened coordinates and validate them against the current grid
     // Note that if current grid is larger than the original grid, there will be no error message as long as totalNumSpins matches
     for (unsigned int i = 0; i < totalNumSpins; i++) {
         
@@ -57,6 +57,7 @@ void initLoad(unsigned char grid[], int spinArray[]) {
 
 void initRandom(unsigned char grid[], int spinArray[], gsl_rng* RNG)
 	{
+    // random initialization with exactly totalNumSpins distinct occupied cells
 	for(unsigned int i=0;i<gridArea;i++)
 		{
 		grid[i]=false;
@@ -78,12 +79,12 @@ void initRandom(unsigned char grid[], int spinArray[], gsl_rng* RNG)
 	}
 		
 void initDisk(unsigned char grid[], int spinArray[]) {
-	
-    // unless the number of spins matches perfectly the number required to shape the full disk 
-    // the disk will not have complete shells
-    // this is a small additional systematic error, but it will not substantially affect the end result
+
+    // Disk-shaped configuration in the center of the grid
+	// A discretized disk generally does not contain exactly N sites, so its
+    // outermost shell may be only partially filled.
     
-    double radius=1./sqrt(PI);
+    double radius=1./sqrt(PI);      //corresponds to unit disk area
     pair<double,double> center=findPosition((gridSize/2) * gridSize + gridSize/2);
 	unsigned int spincounter=0;
     

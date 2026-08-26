@@ -2,7 +2,7 @@
 
 #include <gsl/gsl_rng.h>
 
-double temperatureDecrease(double temperature);
-unsigned long stepIncrease(unsigned long temproundsteps);
-double energyDecreaseProbDistr(double energyDifference, double temperature);
+double temperatureDecrease(double temperature);                                 //simulated annealing cooling schedule
+unsigned long stepIncrease(unsigned long temproundsteps);                       //increase number of MC steps between cooling rounds
+double energyDecreaseProbDistr(double energyDifference, double temperature);    //Metropolis probability exp(Delta E/T) for unfavorable (Delta E < 0) moves
 bool acceptreject(double probability, gsl_rng* RNG);
