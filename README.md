@@ -1,8 +1,31 @@
-# Simulation of the Grasshopper Problem in 2d Euclidean space
+# Grasshopper2D
 
-Currently implemented for a square grid and with simulated annealing
+Grasshopper2D is a C++ implementation of simulated annealing for the planar Euclidean grasshopper problem on a square grid. The lawn has unit area and is represented by `N` occupied grid cells. The code searches for configurations that maximize the discretized grasshopper success probability for a fixed jump distance `d`, with an optional nearest-neighbor interaction.
 
-## 1. Prerequisites and compilation
+## Citation
+
+If you use Grasshopper2D in published work, please cite the software release (see [`CITATION.cff`](CITATION.cff)) and the paper introducing the grasshopper problem and numerical method:
+
+O. Goulko and A. Kent, *The grasshopper problem*, 
+Proc. R. Soc. A **473**, 20170494 (2017),
+https://doi.org/10.1098/rspa.2017.0494.
+
+## Funding
+
+This work was supported by the National Science Foundation under Grant Nos. PHY-2112738 ("CQIS: The Grasshopper Problem") and OSI-2328774 ("ExpandQISE: Track 2: EQUIP-UMB").
+
+## Related publications
+
+- D. Llamas, J. Kent-Dobias, K. Chen, A. Kent, and O. Goulko,
+  *Origin of Symmetry Breaking in the Grasshopper Model*,
+  Phys. Rev. Research **6**, 023235 (2024),
+  https://doi.org/10.1103/PhysRevResearch.6.023235.
+  
+## Related software
+
+- A broader Python implementation supporting both spherical and Euclidean grasshopper models is available at https://github.com/llamas7/grasshopper.
+
+## Prerequisites and compilation
 
 - make
 - GSL library
@@ -12,7 +35,23 @@ To compile the code, type `make` in the shell while in the folder containing the
 
 Optional performance benchmarks and their build instructions are documented in [`benchmarks/README.md`](benchmarks/README.md).
 
-## 2. Code options (the order doesn't matter)
+## Testing
+
+Run the unit tests with
+
+> `make test`
+
+run the integration tests with
+
+> `make integration-test`
+
+or run the complete test suite with
+
+> `make check`
+
+## Running the code
+
+The code uses the following command-line options:
 
 | option          | comment |
 | --------------- | ------------------ |
@@ -27,14 +66,13 @@ Optional performance benchmarks and their build instructions are documented in [
 | `-annealsteps`  | number of simulated annealing steps between initial and final temperature (1000 by default) |
 | `-configoutput` | strict maximum number of configurations in `config.dat`, see below; default is `0` (no output) |
 | `-initconf`     | how to initialise the system: currently implemented: `random` (default), `disk`, or `load` (load configuration from file called `initconf.dat`) |
-| `-delta`        | choice of delta-function discretization: exactly `0` (default) or `1` |
-| `-NNint`        | nearest neighbor interaction coefficient (0 by default) |
+| `-delta`        | choice of delta-function discretization: exactly `0` (default) or `1`; see Goulko and Kent (2017) for their definitions |
+| `-NNint`        | nearest neighbor interaction coefficient (0 by default); positive values favor occupied nearest-neighbor bonds |
 | `-randomseed`   | unsigned initial value for the random number generator (if omitted or set to `0`, a seed is generated from the system clock) |
 | `-overwrite`    | output overwrite policy: exactly `0` (default, reject if an output artifact exists) or `1` (remove old output artifacts before starting) |
 
-
-Required options: `d`
-Recommended options: `N`, `gridsize`, `hours`
+- Required options: `d`
+- Recommended options: `N`, `gridsize`, `hours`
 
 Every option accepts exactly one value and may be supplied at most once. Unknown options, missing values, malformed or out-of-range numbers, and non-finite floating-point values are rejected. The number of spins must satisfy `0 < N < gridsize^2` after automatic or explicit grid sizing.
 
@@ -58,16 +96,16 @@ Example of command to run the code:
 
 > `./grasshopper -N 10000 -initconf random -gridsize 200 -d 0.3 -hours 0.2 -inittemp 20.0 -fintemp 0.05 `
 
-## 3. Plotting spin configurations
+## Plotting tools
 
 Python scripts for plotting spin configurations and other tools can be found in the subfolder `tools`.
 
-- `config_plot.py` plots a grasshopper spin configuration in 2d, such as `initconf.dat` or `bestconf.dat` etc. Input is the name of the configuration file; everthing else is read automatically from `result.dat`, which must be present.
+- `config_plot.py` plots a grasshopper spin configuration in 2D, such as `initconf.dat` or `bestconf.dat` etc. Input is the name of the configuration file; everything else is read automatically from `result.dat`, which must be present.
 - `anneal_animation.py` generates an animation of the simulated annealing process from the file `config.dat`, which is output by the main code. The size of the grid is read automatically from `result.dat`, which must be present.
 - `anneal_frame.py` plots individual frames from `config.dat` rather than creating the full animation.
 - `extract_boundary.py` extracts the boundary of a cogwheel shape (read from `finconf.dat`) and returns it in the polar coordinate representation (rho vs. phi). The files `finconf.dat` and `result.dat` must be present.
 
-## 4. Spatial correlation analysis
+## Spatial correlation analysis
 
 Build the C++ correlation tool explicitly with:
 
@@ -96,7 +134,7 @@ The plot-only Python script reads this spatial output without repeating any corr
 
 It requires NumPy and Matplotlib. By default it plots occupation, normalized local grasshopper probability over the full grid, and the same probability masked to occupied cells. Use repeated `--field` options to plot only selected fields, and `--save FILE` to write the figure instead of opening an interactive window. Normal simulation builds and C++ unit tests do not require these Python plotting dependencies.
 
-## 5. License
+## License
 
 This software is distributed under the GNU General Public License version 3 or, at your option, any later version (GPL-3.0-or-later). See [LICENSE](LICENSE) for details.
 
