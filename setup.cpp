@@ -1,8 +1,22 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Olga Goulko
+
 #include "setup.hpp"
+#include "interactions.hpp"
+#include "output.hpp"
+#include "utilities.hpp"
+
+#include <cmath>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
 using namespace std;
 	
-void initLoad(bool grid[], int spinArray[]) {
+void initLoad(unsigned char grid[], int spinArray[]) {
     
     // Load initial configuration file
     ifstream initconfin("initconf.dat");
@@ -16,7 +30,7 @@ void initLoad(bool grid[], int spinArray[]) {
         grid[i]=false;
         }
         
-    // Read in data checking that totalNumSpins and gridSize match
+    // Read exactly totalNumSpins unique flattened coordinates and validate them against the current grid
     // Note that if current grid is larger than the original grid, there will be no error message as long as totalNumSpins matches
     for (unsigned int i = 0; i < totalNumSpins; i++) {
         
@@ -26,6 +40,10 @@ void initLoad(bool grid[], int spinArray[]) {
 
         if (spinArray[i] < 0 || spinArray[i] >= static_cast<int>(gridArea)) {
             throw runtime_error("Error: spinArray[i] value is out of current grid bounds.");
+            }
+
+        if (grid[spinArray[i]] == true) {
+            throw runtime_error("Error: Duplicate coordinate in initconf.dat.");
             }
 
         grid[spinArray[i]] = true;
@@ -40,8 +58,9 @@ void initLoad(bool grid[], int spinArray[]) {
     }
 		
 
-void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
+void initRandom(unsigned char grid[], int spinArray[], gsl_rng* RNG)
 	{
+    // random initialization with exactly totalNumSpins distinct occupied cells
 	for(unsigned int i=0;i<gridArea;i++)
 		{
 		grid[i]=false;
@@ -62,14 +81,14 @@ void initRandom(bool grid[], int spinArray[], gsl_rng* RNG)
 		}
 	}
 		
-void initDisk(bool grid[], int spinArray[]) {
-	
-    // unless the number of spins matches perfectly the number required to shape the full disk 
-    // the disk will not have complete shells
-    // this is a small additional systematic error, but it will not substantially affect the end result
+void initDisk(unsigned char grid[], int spinArray[]) {
+
+    // Disk-shaped configuration in the center of the grid
+	// A discretized disk generally does not contain exactly N sites, so its
+    // outermost shell may be only partially filled.
     
-    double radius=1./sqrt(PI);
-    pair<double,double> center=findPosition(gridSize*gridSize/2+gridSize/2);
+    double radius=1./sqrt(PI);      //corresponds to unit disk area
+    pair<double,double> center=findPosition((gridSize/2) * gridSize + gridSize/2);
 	unsigned int spincounter=0;
     
     // fill inner part of the disk
@@ -118,10 +137,11 @@ void saveConfig(int *spinArray, const string& filename) {
     ostringstream buffer;
     for (unsigned int i = 0; i < totalNumSpins; i++) buffer << spinArray[i] << '\n';
     file << buffer.str();
+    finishOutputFile(file, filename);
 }
     
     
-void initialize(bool grid[], int spinArray[], gsl_rng* RNG, string initconf) {    
+void initialize(unsigned char grid[], int spinArray[], gsl_rng* RNG, string initconf) {    
     try {
         if (initconf == "random") initRandom(grid, spinArray, RNG);
         else if (initconf == "load") initLoad(grid, spinArray);

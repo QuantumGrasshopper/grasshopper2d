@@ -1,17 +1,26 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Olga Goulko
+
 # extract boundary of a low-temperature cogwheel configuration
 # based on Nguyen Nguyen's code
 
 import numpy as np
 import matplotlib.pyplot as plt
 
+def read_result_value(label, value_type):
+    with open("result.dat") as f:
+        for line in f:
+            key, separator, value = line.partition(":")
+            if separator and key.strip() == label:
+                return value_type(value.strip())
+    raise ValueError(f"Could not find '{label}' in result.dat")
+
+jump = read_result_value("Hopping distance", float)
+gridsize = read_result_value("Size of grid", int)
+
 finconf = np.loadtxt("finconf.dat", dtype = int)
 numberspins = len(finconf)
 cellwidth = numberspins**(-1/2)
-
-with open("result.dat") as f:
-    lines = f.readlines()
-    jump = float(lines[3].strip().split(" ")[-1])
-    gridsize = int(lines[5].strip().split(" ")[-1])
 
 unraveled = np.unravel_index(finconf, (gridsize, gridsize))
 grid = np.zeros((gridsize, gridsize), dtype=int)

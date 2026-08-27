@@ -23,4 +23,11 @@
 *.out
 *.app
 grasshopper
+/tests/grasshopper_tests
+/tools/correlations
 runs/
+/benchmarks/results/
+/benchmarks/archive/
+benchmarks/grasshopper_relative_neighbors
+benchmarks/grasshopper_neighbor_template
+tools/.ipynb_checkpoints/

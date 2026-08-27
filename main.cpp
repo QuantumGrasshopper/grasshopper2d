@@ -1,6 +1,28 @@
-#include "utilities.hpp"
-#include "setup.hpp"
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Olga Goulko
+
 #include "annealing.hpp"
+#include "interactions.hpp"
+#include "output.hpp"
+#include "parameters.hpp"
+#include "setup.hpp"
+#include "utilities.hpp"
+
+#include <algorithm>
+#include <chrono>
+#include <cmath>
+#include <exception>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <gsl/gsl_rng.h>
 
 unsigned int totalNumSpins;
 double cellSize;
@@ -12,72 +34,96 @@ int deltaOption;
 using namespace std; 
 
 int main(int inputN,char *inputV[]) {
+    try {
+    const int outputPrecision=numeric_limits<double>::max_digits10;
+    auto formatDouble = [](double value) {
+        ostringstream buffer;
+        buffer << setprecision(outputPrecision) << value;
+        return buffer.str();
+    };
     
     // SETUP -------------------------------------------------------------------------------------
-    
-    ofstream result("result.dat");
 	
-    // read it parameters from command-line arguments and define derived quantities
-    
-	double d=get_option<double>(inputN,inputV,"d");					//grasshopper hopping distance
-    if (d < EPS) throw invalid_argument("Error: Hopping distance 'd' must be supplied and must be positive.");
-    
-    try {
-        totalNumSpins=get_option<unsigned int>(inputN,inputV,"N");
-        if(totalNumSpins < EPS) throw invalid_argument("Number of spins 'N' not supplied or invalid"); 
-    }
-    catch(const invalid_argument& e) {
-        totalNumSpins=10000;
-        cerr << e.what() << " - Setting N = " << totalNumSpins << endl;
-    }
+    // read parameters from command-line arguments and define derived quantities
+
+    const SimulationParameters parameters = parseSimulationParameters(inputN, inputV);
+    const double d = parameters.hoppingDistance;
+    totalNumSpins = parameters.totalNumSpins;
     cellSize=1./sqrt(double(totalNumSpins));
-    
-    try {
-    gridSize=get_option<unsigned int>(inputN,inputV,"gridsize");
-    if( (gridSize < EPS) || (totalNumSpins > gridSize*gridSize) ) throw invalid_argument("Grid size not supplied or invalid"); 
+
+    if (parameters.gridSize.has_value()) {
+        gridSize = *parameters.gridSize;
     }
-    catch(const invalid_argument& e) {
-        gridSize=2*int(sqrt(double(totalNumSpins)) + 3*d/cellSize + EPS);
-        cerr << e.what() << " - Setting gridSize = " << gridSize << endl;
+    else {
+        // If no explicit gridSize is supplied, choose a generous default box to reduce effects of
+        // artificial open boundaries. In physical units the half-width is approximately 1 + 3*d.
+        // This gives ample space around the unit area lawn, the factor 3 is a conservative buffer.
+        const double automaticHalfGridSize =
+            sqrt(double(totalNumSpins)) + 3*d/cellSize + EPS;
+        if (!isfinite(automaticHalfGridSize)
+            || automaticHalfGridSize > numeric_limits<int>::max()) {
+            throw invalid_argument("Automatically selected grid size is outside the supported range.");
+        }
+        gridSize=2*static_cast<unsigned int>(static_cast<int>(automaticHalfGridSize));
     }
-	gridArea = gridSize*gridSize;
+
+    const unsigned long long selectedGridArea =
+        static_cast<unsigned long long>(gridSize) * gridSize;
+    if (selectedGridArea > numeric_limits<unsigned int>::max()) {
+        throw invalid_argument("Grid area is outside the supported range.");
+    }
+    if (static_cast<unsigned long long>(totalNumSpins) >= selectedGridArea) {
+        throw invalid_argument("N must be smaller than the grid area.");
+    }
+    gridArea = static_cast<unsigned int>(selectedGridArea);
+    validateInteractionTableReach(d);
     
-    double maxtime=get_option<double>(inputN,inputV,"hours");
+    double maxtime=parameters.hours;
     maxtime=60*60*maxtime*1000;
     
-    long unsigned int maxsteps=get_option<long unsigned int>(inputN,inputV,"steps");
-    if(maxsteps < EPS) maxsteps=1e12; //default large value, maximal duration determined by run time
+    long unsigned int maxsteps=parameters.maxSteps;
     
-	long unsigned int temproundsteps=get_option<long unsigned int>(inputN,inputV,"tempsteps");
-    if(temproundsteps>maxsteps) temproundsteps=int(maxsteps/1000.);
+	long unsigned int temproundsteps=parameters.temperatureRoundSteps.value_or(0UL);
+    // Default to one attempted move per spin. If the requested initial round exceeds
+    // the maximal total number of steps, shorten it to leave room for multiple rounds.
+    if(temproundsteps>maxsteps) temproundsteps=maxsteps/1000UL;
     if(temproundsteps<10) temproundsteps=totalNumSpins;
     
-	double temperature=get_option<double>(inputN,inputV,"inittemp");
-	double finaltemperature=get_option<double>(inputN,inputV,"fintemp");
-    if(temperature<EPS) temperature=20.;
-	if(finaltemperature<EPS) finaltemperature=0.01;
+	double temperature=parameters.initialTemperature;
+	double finaltemperature=parameters.finalTemperature;
     
-	int numberannealingsteps=get_option<int>(inputN,inputV,"annealsteps");
-	if(numberannealingsteps<EPS) numberannealingsteps=1000;
+    int numberannealingsteps=parameters.annealingSteps;
     tempScaling=pow((finaltemperature/temperature),1./double(numberannealingsteps));
-    int configOutputs = get_option<int>(inputN,inputV,"configoutput"); // maximal number of configuration snapshots to save for animation
-    int outputconfigbeforetherm=numberannealingsteps/100; int annealingcounter=0;
+    int configOutputs = parameters.configurationOutputs; // maximal number of configuration snapshots to save for animation
+    // Reserve rows for the initial and actual final states; distribute the
+    // remaining rows over distinct cooling stages, which are uniform in log T.
+	const int plannedIntermediateSnapshots = configOutputs >= 2
+	    ? min(configOutputs - 2, numberannealingsteps - 1) : 0;
+	int coolingStageIndex=0;
+	int nextIntermediateSnapshot=1;
+	int configurationsWritten=0;
+	string pendingIntermediateSnapshot;
 	
-	string initconf=get_option<string>(inputN,inputV,"initconf");
-    deltaOption=get_option<int>(inputN,inputV,"delta");
+    string initconf=parameters.initialConfiguration;
+    deltaOption=parameters.deltaOption;
 
-    double NNint = get_option<double>(inputN,inputV,"NNint");
-    
-    // one factor of 1/2 is already taken care of by avoiding double counting
-    double probabilityNormFactor = 1/PI/d/pow(double(totalNumSpins),3./2.);
-    
+    double NNint = parameters.nearestNeighborInteraction;
+
+    prepareOutputFiles(parameters.overwriteExistingOutputs, initconf == "load");
+
 	gsl_rng * RNG = gsl_rng_alloc (gsl_rng_mt19937);
-    long unsigned int seed=get_option<long unsigned int>(inputN,inputV,"randomseed");
+    long unsigned int seed=parameters.randomSeed.value_or(0UL);
     // Use system clock if no random seed supplied (seed is always output)
     if(seed < EPS) seed=chrono::duration_cast<chrono::seconds>(chrono::system_clock::now().time_since_epoch()).count();
 	gsl_rng_set (RNG, seed);
+
+    ofstream result("result.dat");
+	if (!result.is_open()) {
+		throw runtime_error("Failed to open output file result.dat.");
+	}
+	result << setprecision(outputPrecision);
 	
-	unsigned int temproundcounter=0;
+	unsigned long temproundcounter=0;
 	double accratio;
     long unsigned int counter=0; long accepted=0; long accepted_current=0;
     
@@ -94,102 +140,70 @@ int main(int inputN,char *inputV[]) {
 	       << "Temperature scaling factor: " << tempScaling << '\n'
 	       << "Number of annealing steps: " << numberannealingsteps << '\n'
 	       << "Initial number of steps before temperature scaling: " << temproundsteps << "\n\n";
+	checkOutputStream(result, "result.dat", "write");
 
-    auto begin = chrono::high_resolution_clock::now();
-    
     // CONSTRUCT NEIGHBOR LIST ---------------------------------------------------------------------------  
 
-    vector< pair<int,double> > dNeighbourTemplate;
-	vector< pair<int,double> > dNeighbourTable[gridArea];	//for each grid point: list of points that are its d-neighbours with corresponding energies
-    
-    int center = gridSize*gridSize/2+gridSize/2;
-    double thisEnergyContribution;
-    pair<double,double> currentPosition=findPosition(center);
-    for(unsigned int j=0;j<gridArea;j++)
-        {
-        thisEnergyContribution=contributionEnergy(d,euclideanDistance(currentPosition,findPosition(j)));
-        pair<int,double> thisPair(j,thisEnergyContribution);
-        if(thisEnergyContribution > EPS) dNeighbourTemplate.push_back(thisPair);
-        }
-    
-	for(unsigned int j=0;j<dNeighbourTemplate.size();j++)
-		{
-        int coord = dNeighbourTemplate[j].first;
-        int relx = xcoord(coord) - gridSize/2;
-        int rely = ycoord(coord) - gridSize/2;
-        double relativeEnergy = dNeighbourTemplate[j].second;
-        for(unsigned int i=0;i<gridArea;i++)
-            {
-            int gridLocationx = xcoord(i) + relx;
-            int gridLocationy = ycoord(i) + rely;
-            if(gridLocationx >= 0 && gridLocationy >= 0 && gridLocationx < gridSize && gridLocationy < gridSize)
-                {
-                pair<int,double> thisPair(gridLocationx + gridLocationy*gridSize, relativeEnergy);
-                dNeighbourTable[i].push_back(thisPair);
-                }
-            }
-		}
+    auto begin = chrono::high_resolution_clock::now();
+
+    auto interactionTable = buildInteractionTable(d);
 		
     auto now = chrono::high_resolution_clock::now();
     auto timeDiff = chrono::duration_cast<chrono::milliseconds>(now-begin).count();
 	result << "Time to construct neighbors list: " << timeDiff << "ms" << endl;
+	checkOutputStream(result, "result.dat", "write");
     
     // INITIAL SPIN CONFIGURATION ------------------------------------------------------------------------
     
-    bool grid[gridArea];					     //true if spin=1 at this grid point
-    double energyGrid[gridArea];
-	int spinArray[totalNumSpins];				 //grid point where any spin is
-	int noSpinArray[gridArea-totalNumSpins];	 //complementary to above: grid point where no spin is
+    std::vector<unsigned char> grid(gridArea);          //true if spin=1 at this grid point
+	std::vector<int> spinArray(totalNumSpins);          //grid point where any spin is
+	std::vector<int> noSpinArray(gridArea-totalNumSpins); //complementary to above: grid point where no spin is
     
-    initialize(grid, spinArray, RNG, initconf);
+    initialize(grid.data(), spinArray.data(), RNG, initconf);
+
+    // energyGrid[i] is the grasshopper interaction contribution of a hypothetical spin at i with the current occupied set.
+    auto energyGrid = buildGrasshopperInteractionGrid(grid.data(), interactionTable);
+    double grasshopperEnergy = totalGrasshopperInteraction(grid.data(), energyGrid);
     
     unsigned int noSpinCounter=0;
-    double energy = 0;
-    double NNenergy = 0;
+    long long nearestNeighborBonds = 0;
 	for(unsigned int i=0;i<gridArea;i++)
 		{
 		if(grid[i]==false) {noSpinArray[noSpinCounter]=i; noSpinCounter++;}
 		// NN contributions
-		else {
-            //down
-            if(i>=gridSize) NNenergy += grid[i-gridSize];
-            //up
-            if(i<gridSize*(gridSize-1)) NNenergy += grid[i+gridSize];
-            
-            int gridLocationx = xcoord(i);
-            //left
-            if(gridLocationx != 0) NNenergy += grid[i-1];
-            //right
-            if(gridLocationx != gridSize-1) NNenergy += grid[i+1];
-            }
-        // Fill the energy grid
-        energyGrid[i]=0;
-        for(unsigned int j=0;j<dNeighbourTable[i].size();j++)
-			{
-			if(grid[dNeighbourTable[i][j].first]==true)
-				{energyGrid[i] += dNeighbourTable[i][j].second;}
-			}
-        if(grid[i]==true) energy += energyGrid[i];
+		else {nearestNeighborBonds+=nearestNeighborCount(i, grid.data());}
 		}
-    energy = energy/2.;
-    NNenergy = NNenergy*NNint/2.;
-    energy += NNenergy;
+
+    nearestNeighborBonds /= 2;  //to compensate for double counting (a bond is counted from both end points)
+    double energy = grasshopperEnergy + NNint*nearestNeighborBonds;
 		
     int bufferLimit = 10000;
     int flushInterval = 60*1000;
     BufferedFileWriter energies("energies.dat", bufferLimit, chrono::milliseconds(flushInterval));
-	energies.write(to_string(energy*probabilityNormFactor));
+	energies.write(formatDouble(normalizeGrasshopperEnergy(energy,d)));
     BufferedFileWriter temperatures("temperatures.dat", bufferLimit, chrono::milliseconds(flushInterval));
-	ofstream configuration("config.dat");
+	ofstream configuration;
+    // output snapshot of normalized MC objective; equals grasshopper probability when NNint == 0
+	auto buildConfigurationSnapshot = [&]() {
+		ostringstream buffer;
+		for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
+		buffer << setprecision(outputPrecision) << normalizeGrasshopperEnergy(energy,d) << endl;
+		return buffer.str();
+	};
 	if(configOutputs > 0)
         {
-        ostringstream buffer;
-        for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-        buffer << energy*probabilityNormFactor << endl;
-        configuration << buffer.str();
+        configuration.open("config.dat");
+		if (!configuration.is_open()) {
+			throw runtime_error("Failed to open output file config.dat.");
+		}
+		if(configOutputs >= 2) {
+			configuration << buildConfigurationSnapshot();
+			checkOutputStream(configuration, "config.dat", "write");
+			configurationsWritten++;
+		}
         }
     
-	int bestSpinArray[totalNumSpins];	//the overall best spin array during the whole run
+	std::vector<int> bestSpinArray(totalNumSpins);  //the overall best spin array during the whole run
 	for(unsigned int i=0;i<totalNumSpins;i++) bestSpinArray[i]=spinArray[i];
 	double bestenergy=energy;
 		
@@ -200,57 +214,47 @@ int main(int inputN,char *inputV[]) {
 		counter++; temproundcounter++;
 		
         // MC update
-		int destroy=gsl_rng_uniform_int (RNG, totalNumSpins);
-		int oldSpinCoord=spinArray[destroy];
-		int create=gsl_rng_uniform_int (RNG, gridArea-totalNumSpins);
-		int newSpinCoord=noSpinArray[create];
+        // choose one filled and one empty site
+		auto destroy=gsl_rng_uniform_int (RNG, totalNumSpins);
+		unsigned int oldSpinCoord=spinArray[destroy];
+		auto create=gsl_rng_uniform_int (RNG, gridArea-totalNumSpins);
+		unsigned int newSpinCoord=noSpinArray[create];
 		
-		double energyDifference=energyGrid[newSpinCoord]-energyGrid[oldSpinCoord];
+		double grasshopperDifference=energyGrid[newSpinCoord]-energyGrid[oldSpinCoord];
+        // F[new]-F[old] can include the old-new pair itself in F[new] while old is still occupied
+        // Remove that pair because old will be emptied if the update is successful
         if(isAround(d,euclideanDistance(findPosition(newSpinCoord),findPosition(oldSpinCoord))))//NOTE more efficient to keep this check explicit
             {
-            energyDifference -= contributionEnergy(d,euclideanDistance( findPosition(newSpinCoord),findPosition(oldSpinCoord) ));
+            grasshopperDifference -= contributionEnergy(d,euclideanDistance( findPosition(newSpinCoord),findPosition(oldSpinCoord) ));
             }
         // Nearest neighbor contributions
-        if(abs(NNint) > EPS)
-            {
-            //down
-            if(newSpinCoord>=gridSize && newSpinCoord-gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-gridSize];
-            if(oldSpinCoord>=gridSize && oldSpinCoord-gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-gridSize];
-            //up
-            if(newSpinCoord<gridSize*(gridSize-1) && newSpinCoord+gridSize != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+gridSize];
-            if(oldSpinCoord<gridSize*(gridSize-1) && oldSpinCoord+gridSize != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+gridSize];
-                
-            int gridLocationx = xcoord(newSpinCoord);
-            //left
-            if(gridLocationx != 0 && newSpinCoord-1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord-1];
-            //right
-            if(gridLocationx != gridSize-1 && newSpinCoord+1 != oldSpinCoord) energyDifference += NNint*grid[newSpinCoord+1];
-            gridLocationx = xcoord(oldSpinCoord);
-            //left
-            if(gridLocationx != 0 && oldSpinCoord-1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord-1];
-            //right
-            if(gridLocationx != gridSize-1 && oldSpinCoord+1 != newSpinCoord) energyDifference -= NNint*grid[oldSpinCoord+1];
-            }
+        int nearestNeighborDifference = nearestNeighborBondDifference(oldSpinCoord, newSpinCoord, grid.data());
 
 		bool accept;
+        double energyDifference = grasshopperDifference + NNint*nearestNeighborDifference;
 		if(energyDifference>=0) accept=true;
 		else accept=acceptreject(energyDecreaseProbDistr(energyDifference,temperature),RNG);
 		
 		if(accept==true)
 			{
+            // update system state
 			grid[oldSpinCoord]=false; grid[newSpinCoord]=true;
 			spinArray[destroy]=newSpinCoord; noSpinArray[create]=oldSpinCoord;
-			energy+=energyDifference;
-            //update energy grid
-            for(unsigned int j=0;j<dNeighbourTable[oldSpinCoord].size();j++)
+            grasshopperEnergy += grasshopperDifference;
+            nearestNeighborBonds += nearestNeighborDifference;
+            energy = grasshopperEnergy + NNint*nearestNeighborBonds;
+
+            // update energy field: remove the old site's contribution from every affected field value, then add the new site's
+            for(unsigned int j=0;j<interactionTable[oldSpinCoord].size();j++)
                 {
-                energyGrid[dNeighbourTable[oldSpinCoord][j].first] -= dNeighbourTable[oldSpinCoord][j].second;
+                energyGrid[interactionTable[oldSpinCoord][j].first] -= interactionTable[oldSpinCoord][j].second;
                 }
-            for(unsigned int j=0;j<dNeighbourTable[newSpinCoord].size();j++)
+            for(unsigned int j=0;j<interactionTable[newSpinCoord].size();j++)
                 {
-				energyGrid[dNeighbourTable[newSpinCoord][j].first] += dNeighbourTable[newSpinCoord][j].second;
+				energyGrid[interactionTable[newSpinCoord][j].first] += interactionTable[newSpinCoord][j].second;
                 }
 			accepted_current++;
+            // keep track of optimal configuration and corresponding energy
 			if(energy>bestenergy)
 				{
                 bestenergy=energy; 
@@ -264,26 +268,32 @@ int main(int inputN,char *inputV[]) {
 			if(temperature>finaltemperature) 
 				{
 				temperature=temperatureDecrease(temperature);
-				if(annealingcounter%outputconfigbeforetherm==0 && configOutputs > 0) 
-					{
-                    ostringstream buffer;
-                    for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-                    buffer << energy*probabilityNormFactor << endl;
-                    configuration << buffer.str();
-                    }
-				annealingcounter++;
+				coolingStageIndex++;
+
+				if(!pendingIntermediateSnapshot.empty()) {
+					configuration << pendingIntermediateSnapshot;
+					checkOutputStream(configuration, "config.dat", "write");
+					configurationsWritten++;
+					pendingIntermediateSnapshot.clear();
 				}
-			else if(annealingcounter<configOutputs)
-				{
-				annealingcounter++; 
-                ostringstream buffer;
-                for(unsigned int i=0;i<totalNumSpins;i++) buffer << spinArray[i] << " ";
-                buffer << energy*probabilityNormFactor << endl;
-                configuration << buffer.str();
+
+				if(nextIntermediateSnapshot <= plannedIntermediateSnapshots) {
+					const int intermediateTarget = static_cast<int>(
+						static_cast<long long>(nextIntermediateSnapshot)
+						* numberannealingsteps
+						/ (plannedIntermediateSnapshots + 1));
+					if(coolingStageIndex == intermediateTarget) {
+						// Hold this row until a later cooling stage, so an early stop
+						// replaces it with the actual final configuration instead.
+						pendingIntermediateSnapshot = buildConfigurationSnapshot();
+						nextIntermediateSnapshot++;
+                        }
+                    }
 				}
 			accratio=accepted_current/double(temproundcounter);
-            temperatures.write(to_string(counter) + '\t' + to_string(temperature) + '\t' + to_string(accratio));
-			energies.write(to_string(energy*probabilityNormFactor));
+            temperatures.write(to_string(counter) + '\t' + formatDouble(temperature)
+                               + '\t' + formatDouble(accratio));
+			energies.write(formatDouble(normalizeGrasshopperEnergy(energy,d)));
 			accepted+=accepted_current; accepted_current=0;
 			temproundcounter=0;
 			temproundsteps=stepIncrease(temproundsteps);
@@ -295,21 +305,48 @@ int main(int inputN,char *inputV[]) {
 		
     // WRAP UP --------------------------------------------------------------------------------------------
     
-    temperatures.flush();
-    energies.flush();
+    temperatures.finish();
+    energies.finish();
+
+    const long totalAccepted = accepted + accepted_current;
+    const double averageAcceptanceRatio =
+    counter > 0 ? totalAccepted / double(counter) : 0.0;
     
 	result << "\nSimulation took " << timeDiff/60./1000 << " minutes" << '\n'
 	       << "Finished after " << counter << " steps" << '\n'
 	       << "Final temperature: " << temperature << '\n'
-	       << "Average acceptance ratio: " << accepted/double(counter) << "\n\n"
-	       << "final energy: " << energy << '\n'
-	       << "best energy: " << bestenergy << '\n'
-           << "final probability: " << energy*probabilityNormFactor << '\n'
-           << "best probability: " << bestenergy*probabilityNormFactor << "\n\n";
+	       << "Average acceptance ratio: " << averageAcceptanceRatio << "\n\n"
+
+           << "final grasshopper energy: " << grasshopperEnergy << '\n'
+           << "final nearest neighbor bonds: " << nearestNeighborBonds << '\n'
+           << "final total MC objective: " << energy << '\n'
+           << "best total MC objective: " << bestenergy << '\n'
+           << "final grasshopper probability: " << normalizeGrasshopperEnergy(grasshopperEnergy, d) << '\n'
+           << "final nearest neighbor probability: " << nearestNeighborProbability(nearestNeighborBonds) << '\n'
+        // normalized MC objective; equals grasshopper probability when NNint == 0
+           << "final normalized MC objective: " << normalizeGrasshopperEnergy(energy, d) << '\n'
+           << "best normalized MC objective: " << normalizeGrasshopperEnergy(bestenergy, d) << "\n\n";
+
+	checkOutputStream(result, "result.dat", "write");
+
+	if (configOutputs > 0) {
+		if(configurationsWritten < configOutputs
+		   && (configurationsWritten == 0 || counter > 0)) {
+			configuration << buildConfigurationSnapshot();
+			checkOutputStream(configuration, "config.dat", "write");
+			configurationsWritten++;
+		}
+		finishOutputFile(configuration, "config.dat");
+	}
+	finishOutputFile(result, "result.dat");
     
-    if(configOutputs==0) {remove("config.dat");}
-    saveConfig(spinArray, "finconf.dat");
-    saveConfig(bestSpinArray, "bestconf.dat");
+    saveConfig(spinArray.data(), "finconf.dat");
+    saveConfig(bestSpinArray.data(), "bestconf.dat");
     
     return 0;
+    }
+    catch (const exception& error) {
+        cerr << "Error: " << error.what() << endl;
+        return 1;
+    }
 }

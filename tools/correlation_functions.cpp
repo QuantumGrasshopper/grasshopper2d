@@ -1,11 +1,21 @@
-// given a configuration computes different correlations functions
-// somewhat similar to old code grasshopper_dneighbourscount.cpp
-// creates spatial representation of correlations and computes averages
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Olga Goulko
 
-// compile with
-// g++ -O3 -Wall -std=c++17 correlation_functions.cpp ../utilities.o -o correlations -lgsl -lgslcblas -lm
-
+#include "../interactions.hpp"
+#include "../output.hpp"
 #include "../utilities.hpp"
+
+#include <cmath>
+#include <cstddef>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <optional>
+#include <set>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
 unsigned int totalNumSpins;
 double cellSize;
@@ -13,168 +23,356 @@ unsigned int gridSize;
 unsigned int gridArea;
 int deltaOption;
 
-using namespace std; 
+namespace {
 
-int main(int inputN,char *inputV[]) { 
-    
-    // SETUP -------------------------------------------------------------------------------------
-    
-    double d;
-    double corrDist;
-    string line;
-    
-    ifstream paramfile("result.dat");
-    
-    if (!paramfile.is_open()) {
-        cerr << "Error: Could not open result.dat" << endl;
+constexpr const char* resultFilename = "result.dat";
+constexpr const char* outputFilename = "correlations.dat";
+
+struct CorrelationOptions {
+    std::string configurationFilename;
+    std::optional<double> distance;
+};
+
+struct SimulationMetadata {
+    unsigned int totalNumSpins;
+    double hoppingDistance;
+    unsigned int gridSize;
+    int deltaOption;
+};
+
+double parsePositiveDistance(const std::string& text) {
+    std::size_t parsed = 0;
+    double value = 0.0;
+
+    try {
+        value = std::stod(text, &parsed);
+    }
+    catch (const std::exception&) {
+        throw std::invalid_argument("Invalid value for -r: " + text);
     }
 
-    while (getline(paramfile, line)) {
-        if (line.find("Total number of spins:") != string::npos) {
-            sscanf(line.c_str(), "Total number of spins: %d", &totalNumSpins);
+    if (parsed != text.size() || !std::isfinite(value) || value <= 0.0) {
+        throw std::invalid_argument("-r must be a finite value greater than zero: " + text);
+    }
+    return value;
+}
+
+unsigned int parseUnsignedValue(const std::string& text,
+                                const std::string& fieldName) {
+    if (text.empty()
+        || text.find_first_not_of("0123456789") != std::string::npos) {
+        throw std::runtime_error("Invalid " + fieldName + ": " + text);
+    }
+
+    unsigned long long value = 0;
+    try {
+        std::size_t parsed = 0;
+        value = std::stoull(text, &parsed, 10);
+        if (parsed != text.size()) {
+            throw std::runtime_error("Invalid " + fieldName + ": " + text);
         }
-        if (line.find("Hopping distance:") != string::npos) {
-            sscanf(line.c_str(), "Hopping distance: %lf", &d);
+    }
+    catch (const std::exception&) {
+        throw std::runtime_error("Invalid " + fieldName + ": " + text);
+    }
+
+    if (value > std::numeric_limits<unsigned int>::max()) {
+        throw std::runtime_error(fieldName + " is outside the supported range: " + text);
+    }
+    return static_cast<unsigned int>(value);
+}
+
+CorrelationOptions parseOptions(int argc, char* argv[]) {
+    CorrelationOptions options;
+    bool haveConfiguration = false;
+    std::set<std::string> seenOptions;
+    const std::set<std::string> recognizedOptions{"-config", "-r"};
+
+    for (int index = 1; index < argc; ++index) {
+        const std::string option = argv[index];
+        if (recognizedOptions.count(option) == 0) {
+            throw std::invalid_argument("Unknown option: " + option);
         }
-        if (line.find("Size of grid:") != string::npos) {
-            sscanf(line.c_str(), "Size of grid: %d", &gridSize);
+        if (!seenOptions.insert(option).second) {
+            throw std::invalid_argument("Duplicate option: " + option);
         }
-        if (line.find("Option for delta-function discretization:") != string::npos) {
-            sscanf(line.c_str(), "Option for delta-function discretization: %d", &deltaOption);
+        if (index + 1 >= argc
+            || recognizedOptions.count(argv[index + 1]) != 0) {
+            throw std::invalid_argument("Missing value for " + option + ".");
+        }
+
+        const std::string value = argv[++index];
+        if (option == "-config") {
+            if (value.empty()) {
+                throw std::invalid_argument("-config requires a nonempty filename.");
+            }
+            options.configurationFilename = value;
+            haveConfiguration = true;
+        }
+        else if (option == "-r") {
+            options.distance = parsePositiveDistance(value);
         }
     }
 
-    paramfile.close();
-    
-    cout << "2D Grasshopper correlation function analysis\n\n"
-         << "Total number of spins: " << totalNumSpins << '\n'
-         << "Hopping distance: " << d << '\n'
-         << "Size of grid: " << gridSize << '\n'
-         << "Option for delta-function discretization: " << deltaOption << endl;
-    
-    cellSize=1./sqrt(double(totalNumSpins));
-    gridArea = gridSize*gridSize;
-       
-    cout << "Distance for correlation function (in natural length units of the problem):" << endl;
-    cin >> corrDist;
-    
-    // one factor of 1/2 is already taken care of by avoiding double counting
-    // includes one division by N and one division by d (instead could divide by corrDist) <= think about this
-    double probabilityNormFactor = 1/PI/d/pow(double(totalNumSpins),3./2.);
-    
-    // CONSTRUCT NEIGHBOR LIST ---------------------------------------------------------------------------  
+    if (!haveConfiguration) {
+        throw std::invalid_argument("Missing required option -config.");
+    }
+    return options;
+}
 
-    vector< pair<int,double> > dNeighbourTemplate;
-	vector< pair<int,double> > dNeighbourTable[gridArea];	//for each grid point: list of points that are its d-neighbours with corresponding energies
-    
-    int center = gridSize*gridSize/2+gridSize/2;
-    double thisEnergyContribution;
-    pair<double,double> currentPosition=findPosition(center);
-    for(unsigned int j=0;j<gridArea;j++)
-        {
-        thisEnergyContribution=contributionEnergy(corrDist,euclideanDistance(currentPosition,findPosition(j)));
-        pair<int,double> thisPair(j,thisEnergyContribution);
-        if(thisEnergyContribution > EPS) dNeighbourTemplate.push_back(thisPair);
-        }
-    
-	for(unsigned int j=0;j<dNeighbourTemplate.size();j++)
-		{
-        int coord = dNeighbourTemplate[j].first;
-        int relx = xcoord(coord) - gridSize/2;
-        int rely = ycoord(coord) - gridSize/2;
-        double relativeEnergy = dNeighbourTemplate[j].second;
-        for(unsigned int i=0;i<gridArea;i++)
-            {
-            int gridLocationx = xcoord(i) + relx;
-            int gridLocationy = ycoord(i) + rely;
-            if(gridLocationx >= 0 && gridLocationy >= 0 && gridLocationx < gridSize && gridLocationy < gridSize)
-                {
-                pair<int,double> thisPair(gridLocationx + gridLocationy*gridSize, relativeEnergy);
-                dNeighbourTable[i].push_back(thisPair);
-                }
-            }
-		}
-		
-    // LOAD SPIN CONFIGURATION ---------------------------------------------------------------------------
-    
-    bool grid[gridArea];					     //true if spin=1 at this grid point
-    double corrGrid[gridArea];
-	int spinArray[totalNumSpins];				 //grid point where any spin is
-    
-    string configFilename;
-    cout << "Enter the name of the file containing the configuration: ";
-    cin >> configFilename;
-    
-    ifstream configfile(configFilename);
-    
-        if (!configfile.is_open()) {
-        throw runtime_error("Error: Cannot open configuration file for reading.");
-        }
-     
-    // Prep the grid
-    for(unsigned int i=0;i<gridArea;i++)
-        {
-        grid[i]=false;
-        }
-        
-    // Note that if current grid is larger than the original grid, there will be no error message as long as totalNumSpins matches
-    for (unsigned int i = 0; i < totalNumSpins; i++) {
-        
-        if (!(configfile >> spinArray[i])) {
-            throw runtime_error("Error: Invalid or insufficient data in configuration file.");
-            }
+void assignMetadataValue(std::optional<unsigned int>& destination,
+                         const std::string& valueText,
+                         const std::string& fieldName,
+                         const std::string& filename) {
+    if (destination.has_value()) {
+        throw std::runtime_error("Duplicate " + fieldName
+                                 + " field in " + filename + ".");
+    }
+    destination = parseUnsignedValue(valueText, fieldName);
+}
 
-        if (spinArray[i] < 0 || spinArray[i] >= static_cast<int>(gridArea)) {
-            throw runtime_error("Error: spinArray[i] value is out of current grid bounds.");
-            }
-
-        grid[spinArray[i]] = true;
+void assignDistance(std::optional<double>& destination,
+                    const std::string& valueText,
+                    const std::string& filename) {
+    if (destination.has_value()) {
+        throw std::runtime_error("Duplicate Hopping distance field in "
+                                 + filename + ".");
     }
 
-    int extraCheck;
-    if (configfile >> extraCheck) {
-        throw runtime_error("Error: configuration contains more data than expected.");
-        }
-        
-    // COMPUTE CORRELATIONS ------------------------------------------------------------------------------
-    
-    double correlation = 0;
-    
-    for(unsigned int i=0;i<gridArea;i++)
-		{
-        corrGrid[i]=0;
-        for(unsigned int j=0;j<dNeighbourTable[i].size();j++)
-			{
-			if(grid[dNeighbourTable[i][j].first]==true)
-				{corrGrid[i] += dNeighbourTable[i][j].second;}
-			}
-        if(grid[i]==true) correlation += corrGrid[i];
-		}
-		
-    correlation = correlation/2.*probabilityNormFactor; // for correlation distance = d this will equal probability 
-    
-    // SAVE AND OUTPUT -----------------------------------------------------------------------------------
-    
-    cout << "The total normalized correlation function is: " << correlation << endl;
-    
-    //only outputting correlations at points that do have spins
-    ofstream corrOutput("correlations.dat");
-	for(int i=0;i<totalNumSpins;i++) corrOutput << corrGrid[spinArray[i]]*probabilityNormFactor << endl;
-    
-    // to plot in python
-    
-    // import numpy as np
-    // import matplotlib.pyplot as plt
-    // finconf = np.loadtxt("finconf.dat", dtype = int)
-    // gridsize = 550
-    // unraveled = np.unravel_index(finconf, (gridsize, gridsize))
-    // grid = np.zeros((gridsize,gridsize))
-    // data = np.loadtxt("correlations.dat")
-    // grid[unraveled] = data
-    // plt.imshow(grid, interpolation='None',cmap='Greens')
-    // plt.show()
+    std::size_t parsed = 0;
+    double value = 0.0;
+    try {
+        value = std::stod(valueText, &parsed);
+    }
+    catch (const std::exception&) {
+        throw std::runtime_error("Invalid hopping distance in " + filename
+                                 + ": " + valueText);
+    }
+    if (parsed != valueText.size() || !std::isfinite(value) || value <= 0.0) {
+        throw std::runtime_error("Hopping distance must be a finite value greater "
+                                 "than zero in " + filename + ": " + valueText);
+    }
+    destination = value;
+}
 
-    
-    
-    return 0;
+SimulationMetadata readMetadata(const std::string& filename) {
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        throw std::runtime_error("Failed to open metadata file " + filename + ".");
+    }
+
+    const std::string spinLabel = "Total number of spins: ";
+    const std::string distanceLabel = "Hopping distance: ";
+    const std::string gridLabel = "Size of grid: ";
+    const std::string deltaLabel =
+        "Option for delta-function discretization: ";
+    std::optional<unsigned int> parsedSpins;
+    std::optional<double> parsedDistance;
+    std::optional<unsigned int> parsedGridSize;
+    std::optional<unsigned int> parsedDelta;
+    std::string line;
+
+    while (std::getline(input, line)) {
+        if (line.compare(0, spinLabel.size(), spinLabel) == 0) {
+            assignMetadataValue(parsedSpins, line.substr(spinLabel.size()),
+                                "total number of spins", filename);
+        }
+        else if (line.compare(0, distanceLabel.size(), distanceLabel) == 0) {
+            assignDistance(parsedDistance, line.substr(distanceLabel.size()),
+                           filename);
+        }
+        else if (line.compare(0, gridLabel.size(), gridLabel) == 0) {
+            assignMetadataValue(parsedGridSize, line.substr(gridLabel.size()),
+                                "grid size", filename);
+        }
+        else if (line.compare(0, deltaLabel.size(), deltaLabel) == 0) {
+            assignMetadataValue(parsedDelta, line.substr(deltaLabel.size()),
+                                "delta option", filename);
+        }
+    }
+    if (input.bad()) {
+        throw std::runtime_error("Failed to read metadata file " + filename + ".");
+    }
+
+    if (!parsedSpins.has_value()) {
+        throw std::runtime_error("Missing Total number of spins field in "
+                                 + filename + ".");
+    }
+    if (!parsedGridSize.has_value()) {
+        throw std::runtime_error("Missing Size of grid field in "
+                                 + filename + ".");
+    }
+    if (!parsedDistance.has_value()) {
+        throw std::runtime_error("Missing Hopping distance field in "
+                                 + filename + ".");
+    }
+    if (!parsedDelta.has_value()) {
+        throw std::runtime_error(
+            "Missing Option for delta-function discretization field in "
+            + filename + ".");
+    }
+    if (*parsedSpins == 0) {
+        throw std::runtime_error("Total number of spins must be greater than zero in "
+                                 + filename + ".");
+    }
+    if (*parsedGridSize == 0) {
+        throw std::runtime_error("Grid size must be greater than zero in "
+                                 + filename + ".");
+    }
+    if (*parsedDelta > 1) {
+        throw std::runtime_error("Delta option must be exactly 0 or 1 in "
+                                 + filename + ".");
+    }
+
+    return {*parsedSpins, *parsedDistance, *parsedGridSize,
+            static_cast<int>(*parsedDelta)};
+}
+
+std::vector<unsigned char> readConfiguration(const std::string& filename) {
+    std::ifstream input(filename);
+    if (!input.is_open()) {
+        throw std::runtime_error("Failed to open configuration file " + filename + ".");
+    }
+
+    std::vector<unsigned char> occupation(gridArea, 0);
+    for (unsigned int index = 0; index < totalNumSpins; ++index) {
+        std::string coordinateText;
+        if (!(input >> coordinateText)) {
+            throw std::runtime_error("Configuration file " + filename
+                                     + " contains fewer than "
+                                     + std::to_string(totalNumSpins)
+                                     + " coordinates.");
+        }
+
+        if (coordinateText.empty()
+            || coordinateText.find_first_not_of("0123456789")
+               != std::string::npos) {
+            throw std::runtime_error("Invalid coordinate in " + filename
+                                     + ": " + coordinateText);
+        }
+
+        unsigned long long coordinate = 0;
+        try {
+            std::size_t parsed = 0;
+            coordinate = std::stoull(coordinateText, &parsed, 10);
+            if (parsed != coordinateText.size()) {
+                throw std::runtime_error("Invalid coordinate");
+            }
+        }
+        catch (const std::exception&) {
+            throw std::runtime_error("Invalid coordinate in " + filename
+                                     + ": " + coordinateText);
+        }
+
+        if (coordinate >= gridArea) {
+            throw std::runtime_error("Coordinate is outside the grid in "
+                                     + filename + ": " + coordinateText);
+        }
+        if (occupation[static_cast<unsigned int>(coordinate)] != 0) {
+            throw std::runtime_error("Duplicate coordinate in " + filename
+                                     + ": " + coordinateText);
+        }
+        occupation[static_cast<unsigned int>(coordinate)] = 1;
+    }
+
+    std::string trailingData;
+    if (input >> trailingData) {
+        throw std::runtime_error("Configuration file " + filename
+                                 + " contains trailing data: " + trailingData);
+    }
+    if (input.bad()) {
+        throw std::runtime_error("Failed to read configuration file "
+                                 + filename + ".");
+    }
+    return occupation;
+}
+
+} // namespace
+
+int main(int argc, char* argv[]) {
+    try {
+        const CorrelationOptions options = parseOptions(argc, argv);
+        const SimulationMetadata metadata = readMetadata(resultFilename);
+        const double requestedDistance =
+            options.distance.value_or(metadata.hoppingDistance);
+
+        const unsigned long long selectedGridArea =
+            static_cast<unsigned long long>(metadata.gridSize) * metadata.gridSize;
+        if (selectedGridArea > std::numeric_limits<unsigned int>::max()
+            || selectedGridArea > std::numeric_limits<int>::max()) {
+            throw std::runtime_error("Grid area is outside the supported range.");
+        }
+        if (metadata.totalNumSpins >= selectedGridArea) {
+            throw std::runtime_error("Total number of spins must be smaller than the grid area.");
+        }
+
+        totalNumSpins = metadata.totalNumSpins;
+        gridSize = metadata.gridSize;
+        gridArea = static_cast<unsigned int>(selectedGridArea);
+        deltaOption = metadata.deltaOption;
+        cellSize = 1.0 / std::sqrt(static_cast<double>(totalNumSpins));
+
+        const std::vector<unsigned char> occupation =
+            readConfiguration(options.configurationFilename);
+        if (requestedDistance <= 2.0 * cellSize) {
+            std::cerr << "Warning: requested distance r <= 2*cellSize; the smeared "
+                      << "interaction is not reliable at distances comparable to "
+                      << "the grid spacing\n";
+        }
+        const GrasshopperInteractionTable interactionTable =
+            buildInteractionTable(requestedDistance);
+        const std::vector<double> interactionGrid =
+            buildGrasshopperInteractionGrid(occupation.data(), interactionTable);
+        const double totalInteraction =
+            totalGrasshopperInteraction(occupation.data(), interactionGrid);
+
+        // Retain local nearest neighbor counts for every site, including empty sites.
+        // The global bond total uses occupied sites only and halves to undo double counting.
+        std::vector<unsigned int> nearestNeighborCounts(gridArea);
+        long long nearestNeighborBonds = 0;
+        for (unsigned int cell = 0; cell < gridArea; ++cell) {
+            nearestNeighborCounts[cell] =
+                nearestNeighborCount(cell, occupation.data());
+            if (occupation[cell] != 0) {
+                nearestNeighborBonds += nearestNeighborCounts[cell];
+            }
+        }
+        nearestNeighborBonds /= 2;
+
+        std::ofstream output(outputFilename);
+        if (!output.is_open()) {
+            throw std::runtime_error("Failed to open output file "
+                                     + std::string(outputFilename) + ".");
+        }
+        output << std::setprecision(std::numeric_limits<double>::max_digits10);
+        output << "# cell x y occupation local_grasshopper_probability nn_fraction\n";
+
+        // Output the interaction field over the full lattice; occupation is a separate
+        // column so later post-processing can mask or inspect empty-site values.
+        for (unsigned int cell = 0; cell < gridArea; ++cell) {
+            output << cell << ' '
+                   << xcoord(cell) << ' '
+                   << ycoord(cell) << ' '
+                   << static_cast<unsigned int>(occupation[cell]) << ' '
+                   << normalizeGrasshopperInteraction(interactionGrid[cell],
+                                                      requestedDistance) << ' '
+                   << normalizeNearestNeighborCount(nearestNeighborCounts[cell])
+                   << '\n';
+        }
+        finishOutputFile(output, outputFilename);
+
+        std::cout << std::setprecision(std::numeric_limits<double>::max_digits10)
+                  << "Requested distance: " << requestedDistance << '\n'
+                  << "Global grasshopper probability: "
+                  << normalizeGrasshopperEnergy(totalInteraction,
+                                                requestedDistance) << '\n'
+                  << "Global nearest-neighbor probability: "
+                  << nearestNeighborProbability(nearestNeighborBonds) << '\n'
+                  << "Output file: " << outputFilename << '\n';
+        return 0;
+    }
+    catch (const std::exception& error) {
+        std::cerr << "Error: " << error.what() << '\n';
+        return 1;
+    }
 }

@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Olga Goulko
+
+#pragma once
+
+#include <utility>
+#include <vector>
+
+//grid geometry
+
+int xcoord(int gridPoint);
+int ycoord(int gridPoint);
+std::pair<double,double> findPosition(int gridPoint);
+double euclideanDistance(std::pair<double,double> point1, std::pair<double,double> point2);
+double euclideanDistance(std::pair<int,int> point1, std::pair<int,int> point2);
+
+//grasshopper interaction
+
+bool isAround(double have, double comparewith);
+double contributionEnergy(double have, double comparewith);
+
+//interaction fields
+
+void validateInteractionTableReach(double distance);
+using GrasshopperInteractionTable = std::vector<std::vector<std::pair<int,double>>>;
+GrasshopperInteractionTable buildInteractionTable(double distance);
+std::vector<double> buildGrasshopperInteractionGrid(const unsigned char grid[], const GrasshopperInteractionTable& table);
+double totalGrasshopperInteraction(const unsigned char grid[], const std::vector<double>& interactionGrid);
+
+//nearest-neighbor contributions
+
+unsigned int nearestNeighborCount(const unsigned int cell, const unsigned char grid[]);
+bool areNearestNeighbors(const unsigned int cell1, const unsigned int cell2);
+int nearestNeighborBondDifference(const unsigned int oldCell, const unsigned int newCell, const unsigned char grid[]); // Change in occupied NN bonds for oldCell -> newCell; grid is the pre-move state
+
+//normalizations
+
+double normalizeGrasshopperEnergy(double energy, double distance);
+double normalizeGrasshopperInteraction(double interaction, double distance);
+double normalizeNearestNeighborCount(unsigned int count);
+double nearestNeighborProbability(long long nearestNeighborBonds);

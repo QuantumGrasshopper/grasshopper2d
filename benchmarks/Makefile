@@ -1,29 +1,30 @@
+CXX ?= g++
+CXXFLAGS ?= -O3 -std=c++17
+LDFLAGS ?=
+LDLIBS ?= -lgsl -lgslcblas -lm
 
-# declare variables
-CXX = g++
-#CXX = clang++-9
-LD = $(CXX)
-# CXXFLAGS = -g -pg -O1 -Wall -std=c++17
-# LDFLAGS = -g -pg -lgsl -lgslcblas -lm
-CXXFLAGS = -O3 -Wall -std=c++17
-LDFLAGS = -lgsl -lgslcblas -lm
+BENCHMARK_CPPFLAGS = -I..
 
-OBJS = grasshopper.o common.o
+BENCHMARKS = \
+	grasshopper_relative_neighbors \
+	grasshopper_neighbor_template
 
-# link .o-files to program
-grasshopper:  $(OBJS)
-	$(LD) $(OBJS) -o grasshopper $(LDFLAGS)
+COMMON_OBJ = interactions_benchmark.o
 
-# create .o-files from .cpp-files using g++
-grasshopper.o: grasshopper.cpp common.hpp
-	$(CXX) $(CXXFLAGS) -c grasshopper.cpp
-common.o: common.cpp common.hpp
-	$(CXX) $(CXXFLAGS) -c common.cpp
+.PHONY: all active-benchmarks clean
 
+all: active-benchmarks
 
-# clean up
-.PHONY: clean tidy
+active-benchmarks: $(BENCHMARKS)
+
+$(BENCHMARKS): %: %.o $(COMMON_OBJ)
+	$(CXX) $(LDFLAGS) $^ -o $@ $(LDLIBS)
+
+%.o: %.cpp ../interactions.hpp ../utilities.hpp
+	$(CXX) $(CPPFLAGS) $(BENCHMARK_CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+interactions_benchmark.o: ../interactions.cpp ../interactions.hpp ../utilities.hpp
+	$(CXX) $(CPPFLAGS) $(BENCHMARK_CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
 clean:
-	rm -f *~ *.o
-tidy:	clean
-	rm -f grasshopper
+	$(RM) *.o $(BENCHMARKS)

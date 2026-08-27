@@ -1,7 +1,14 @@
-#include "utilities.hpp"
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Olga Goulko
 
-void initLoad(bool grid[], int spinArray[]);
-void initRandom(bool grid[], int spinArray[], gsl_rng* RNG);
-void initDisk(bool grid[], int spinArray[]);
+#pragma once
+
+#include <string>
+
+#include <gsl/gsl_rng.h>
+
+void initLoad(unsigned char grid[], int spinArray[]);
+void initRandom(unsigned char grid[], int spinArray[], gsl_rng* RNG);
+void initDisk(unsigned char grid[], int spinArray[]);
 void saveConfig(int *spinArray, const std::string& filename);
-void initialize(bool grid[], int spinArray[], gsl_rng* RNG, std::string initconf);
+void initialize(unsigned char grid[], int spinArray[], gsl_rng* RNG, std::string initconf);

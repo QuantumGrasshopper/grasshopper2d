@@ -1,12 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 Olga Goulko
+
 import numpy as np
 import matplotlib.pyplot as plt 
 
-data = np.loadtxt("config.dat", dtype = float)
+def read_result_value(label, value_type):
+    with open("result.dat") as f:
+        for line in f:
+            key, separator, value = line.partition(":")
+            if separator and key.strip() == label:
+                return value_type(value.strip())
+    raise ValueError(f"Could not find '{label}' in result.dat")
 
-with open("result.dat") as f:
-    lines = f.readlines()
-    gridsize = int(lines[5].strip().split(" ")[-1])
-    
+gridsize = read_result_value("Size of grid", int)
+
+data = np.atleast_2d(np.loadtxt("config.dat", dtype=float))
+
 print("Entering -1 will end the loop")
 
 while(True):
