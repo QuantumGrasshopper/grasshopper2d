@@ -31,3 +31,7 @@ runs/
 benchmarks/grasshopper_relative_neighbors
 benchmarks/grasshopper_neighbor_template
 tools/.ipynb_checkpoints/
+
+# Python cache files
+__pycache__/
+*.py[cod]
