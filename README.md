@@ -23,6 +23,7 @@ This work was supported by the National Science Foundation under Grant Nos. PHY-
   
 ## Related software
 
+- The analogous implementation for the 3D grasshopper problem is available at https://github.com/QuantumGrasshopper/grasshopper3d
 - A broader Python implementation supporting both spherical and Euclidean grasshopper models is available at https://github.com/llamas7/grasshopper.
 
 ## Prerequisites and compilation
