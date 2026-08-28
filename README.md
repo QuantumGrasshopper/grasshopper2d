@@ -1,5 +1,7 @@
 # Grasshopper2D
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22149974.svg)](https://doi.org/10.5281/zenodo.22149974)
+
 Grasshopper2D is a C++ implementation of simulated annealing for the planar Euclidean grasshopper problem on a square grid. The lawn has unit area and is represented by `N` occupied grid cells. The code searches for configurations that maximize the discretized grasshopper success probability for a fixed jump distance `d`, with an optional nearest-neighbor interaction.
 
 ## Citation
